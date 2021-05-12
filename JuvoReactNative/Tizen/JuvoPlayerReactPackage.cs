@@ -11,7 +11,6 @@ namespace JuvoReactNative
     public class JuvoPlayerReactPackage : IReactPackage
     {
         private ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
-        public readonly string Tag = "JuvoRN";
         private readonly IDeepLinkSender deepLinkSender;
 
         public JuvoPlayerReactPackage(IDeepLinkSender deepLinkSender)
