@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31205.134
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "JuvoReactNative", "JuvoReactNative\Tizen\JuvoReactNative.csproj", "{4965847A-48F9-478A-9332-9C9C12B7030A}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "UI.Common", "UI.Common\UI.Common.csproj", "{55D34612-CA53-4C3B-BB27-9ED95969FC25}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PlayerService", "PlayerService\PlayerService.csproj", "{CD0539BA-B56C-46BF-AC3F-3DEEA99B6D32}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4965847A-48F9-478A-9332-9C9C12B7030A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4965847A-48F9-478A-9332-9C9C12B7030A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4965847A-48F9-478A-9332-9C9C12B7030A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4965847A-48F9-478A-9332-9C9C12B7030A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{55D34612-CA53-4C3B-BB27-9ED95969FC25}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{55D34612-CA53-4C3B-BB27-9ED95969FC25}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{55D34612-CA53-4C3B-BB27-9ED95969FC25}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{55D34612-CA53-4C3B-BB27-9ED95969FC25}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CD0539BA-B56C-46BF-AC3F-3DEEA99B6D32}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CD0539BA-B56C-46BF-AC3F-3DEEA99B6D32}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CD0539BA-B56C-46BF-AC3F-3DEEA99B6D32}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CD0539BA-B56C-46BF-AC3F-3DEEA99B6D32}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {3BA48539-34D8-4047-86BE-2AEFFB6B6E53}
+	EndGlobalSection
+EndGlobal
