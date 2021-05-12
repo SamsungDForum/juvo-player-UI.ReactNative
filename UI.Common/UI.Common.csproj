@@ -1,0 +1,22 @@
+﻿<Project Sdk="Tizen.NET.Sdk/1.1.6">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFrameworks>tizen50;tizen60</TargetFrameworks>
+    <LangVersion>7.3</LangVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugType>portable</DebugType>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>None</DebugType>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  
+  <ItemGroup>
+	  <PackageReference Include="JuvoPlayer" Version="2.2.0-alpha" />
+	  <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
+  </ItemGroup>
+</Project>
+
