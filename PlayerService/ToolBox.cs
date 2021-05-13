@@ -15,7 +15,6 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -44,7 +43,7 @@ namespace PlayerService
 
     internal static class PlayerServiceToolBox
     {
-        public static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoPlayer");
+        public static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
 
         public static StreamDescription ToStreamDescription(this Format format, StreamType stream)
         {
