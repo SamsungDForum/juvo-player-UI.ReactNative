@@ -35,7 +35,7 @@
   <ItemGroup>
 	  <PackageReference Include="JuvoPlayer" Version="2.2.0-alpha" />
 	  <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
-	  <PackageReference Include="System.Text.Encoding.CodePages" Version="5.0.0" />
+	  <PackageReference Include="System.Text.Encoding.CodePages" Version="4.7.1" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="ReactNativeTizen">
