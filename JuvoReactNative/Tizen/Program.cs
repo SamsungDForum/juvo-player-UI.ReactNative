@@ -7,8 +7,6 @@ using System.Reactive.Subjects;
 using ReactNative;
 using ReactNative.Shell;
 using ReactNative.Modules.Core;
-using JuvoLogger.Tizen;
-using JuvoPlayer.Common;
 using Log = Tizen.Log;
 using Tizen.Applications;
 using UI.Common;

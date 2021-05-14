@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading;
 using ReactNative;
 using ReactNative.Bridge;
-using JuvoPlayer;
 using JuvoPlayer.Common;
 using JuvoLogger;
 using ILogger = JuvoLogger.ILogger;
