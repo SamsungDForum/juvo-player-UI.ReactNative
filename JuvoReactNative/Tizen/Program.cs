@@ -109,6 +109,9 @@ namespace JuvoReactNative
         {
             AppDomain.CurrentDomain.UnhandledException += UnhandledException;
 
+            JuvoLogger.Tizen.TizenLoggerManager.Configure();
+            JuvoPlayer.Platforms.Tizen.PlatformTizen.Init();
+
             try
             {
                 ReactNativeApp app = new ReactNativeApp();

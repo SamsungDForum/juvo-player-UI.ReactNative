@@ -14,15 +14,16 @@ using PlayerService;
 using Tizen.Applications;
 using UI.Common;
 
-
 namespace JuvoReactNative
 {
     public class JuvoPlayerModule : ReactContextNativeModuleBase, ILifecycleEventListener, ISeekLogicClient
     {
         private Timer playbackTimer;
         private SeekLogic seekLogic = null; // needs to be initialized in the constructor!
-        private ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
-        public readonly string Tag = "JuvoRN";
+
+        private const string Tag = "JuvoRN";
+        private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger(Tag);
+
         EcoreEvent<EcoreKeyEventArgs> _keyDown;
         EcoreEvent<EcoreKeyEventArgs> _keyUp;
         Window window = ReactProgram.RctWindow; //The main window of the application has to be transparent.
