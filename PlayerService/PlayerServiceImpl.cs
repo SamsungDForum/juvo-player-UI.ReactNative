@@ -110,14 +110,14 @@ namespace PlayerService
             Logger.LogExit();
         }
 
-        private void OnEvent(IEvent ev)
+        private async Task OnEvent(IEvent ev)
         {
             Logger.Info(ev.ToString());
 
             switch (ev)
             {
                 case EosEvent _:
-                    ThreadJob(_playerStateSubject.OnCompleted);
+                    await ThreadJob(_playerStateSubject.OnCompleted);
                     break;
 
                 case BufferingEvent buf:
@@ -126,19 +126,17 @@ namespace PlayerService
             }
         }
 
-        private TResult ThreadJob<TResult>(Func<TResult> threadFunction)
+        private async Task<TResult> ThreadJob<TResult>(Func<TResult> threadFunction)
         {
-            var resultObj = _playerThread.Factory.StartNew(_threadFunctionInvoker, threadFunction)
-                .GetAwaiter()
-                .GetResult();
-            return Unsafe.As<object,TResult>(ref resultObj);
+            var resultObj = await _playerThread.Factory.StartNew(_threadFunctionInvoker, threadFunction);
+            return Unsafe.As<object, TResult>(ref resultObj);
         }
 
-        private readonly Func<object,object> _threadFunctionInvoker;
+        private readonly Func<object, object> _threadFunctionInvoker;
         private object InvokeFunctionImpl(object functionObj)
         {
             Logger.LogEnter();
-            
+
             object result;
             try
             {
@@ -154,7 +152,10 @@ namespace PlayerService
             return result;
         }
 
-        private void ThreadJob(Action threadAction) => _playerThread.Factory.StartNew(_threadActionInvoker,threadAction);
+        private Task ThreadJob(Action threadAction)
+        {
+            return _playerThread.Factory.StartNew(_threadActionInvoker, threadAction);
+        }
 
         private readonly Action<object> _threadActionInvoker;
         private void InvokeActionImpl(object actionObj)
@@ -171,6 +172,11 @@ namespace PlayerService
             }
 
             Logger.LogExit();
+        }
+
+        private IDisposable SubscribePlayerEvents(IPlayer player)
+        {
+            return player.OnEvent().Subscribe(async (e) => await OnEvent(e));
         }
 
         public void Dispose()
@@ -199,7 +205,7 @@ namespace PlayerService
         {
             Logger.LogEnter();
 
-            await ThreadJob(async () => await _player.Pause());
+            await await ThreadJob(async () => await _player.Pause());
 
             Logger.LogExit();
         }
@@ -208,7 +214,7 @@ namespace PlayerService
         {
             Logger.LogEnter();
 
-            await ThreadJob(async () => await _player.Seek(to));
+            await await ThreadJob(async () => await _player.Seek(to));
 
             Logger.LogExit();
         }
@@ -217,7 +223,7 @@ namespace PlayerService
         {
             Logger.LogEnter($"Selecting {streamDescription.StreamType} {streamDescription.Description}");
 
-            await ThreadJob(async () =>
+            await await ThreadJob(async () =>
             {
                 var selected = _player.GetStreamGroups().SelectStream(
                     streamDescription.StreamType.ToContentType(),
@@ -244,29 +250,29 @@ namespace PlayerService
             throw new NotImplementedException();
         }
 
-        public Task<List<StreamDescription>> GetStreamsDescription(StreamType streamType)
+        public async Task<List<StreamDescription>> GetStreamsDescription(StreamType streamType)
         {
             Logger.LogEnter(streamType.ToString());
 
-            var result = ThreadJob(() =>
+            var result = await ThreadJob(() =>
                 _player.GetStreamGroups().GetStreamDescriptionsFromStreamType(streamType));
 
             Logger.LogExit();
 
-            return Task.FromResult(result.ToList());
+            return result.ToList();
         }
 
         public async Task SetSource(ClipDefinition clip)
         {
             Logger.LogEnter(clip.Url);
 
-            await ThreadJob(async () =>
+            await await ThreadJob(async () =>
             {
                 IPlayer player = BuildDashPlayer(clip);
-                _playerEventSubscription = player.OnEvent().Subscribe(OnEvent);
+                _playerEventSubscription = SubscribePlayerEvents(player);
 
                 await player.Prepare();
-                
+
                 _player = player;
                 _currentClip = clip;
 
@@ -276,37 +282,35 @@ namespace PlayerService
             Logger.LogExit();
         }
 
-        public Task Start()
+        public async Task Start()
         {
             Logger.LogEnter();
 
-            ThreadJob(()=>
+            await ThreadJob(() =>
             {
                 _player.Play();
                 _playerStateSubject.OnNext(PlayerState.Playing);
             });
 
             Logger.LogExit();
-            return Task.CompletedTask;
         }
 
-        public Task Stop()
+        public async Task Stop()
         {
             Logger.LogEnter();
 
             // Terminate by closing state subject.
             // Caller responsibility to call Dispose() on plyer state subject completion.
-            ThreadJob(_playerStateSubject.OnCompleted);
+            await ThreadJob(_playerStateSubject.OnCompleted);
 
             Logger.LogExit();
-            return Task.CompletedTask;
         }
 
         public async Task Suspend()
         {
             Logger.LogEnter();
 
-            await ThreadJob(async () =>
+            await await ThreadJob(async () =>
             {
                 _suspendTimeIndex = _player.Position ?? TimeSpan.Zero;
                 await TerminatePlayer();
@@ -321,10 +325,10 @@ namespace PlayerService
         {
             Logger.LogEnter();
 
-            await ThreadJob(async () =>
+            await await ThreadJob(async () =>
             {
                 IPlayer player = BuildDashPlayer(_currentClip, new Configuration { StartTime = _suspendTimeIndex });
-                _playerEventSubscription = player.OnEvent().Subscribe(OnEvent);
+                _playerEventSubscription = SubscribePlayerEvents(player);
 
                 await player.Prepare();
                 player.Play();
@@ -338,11 +342,11 @@ namespace PlayerService
         }
 
         public IObservable<PlayerState> StateChanged() => _playerStateSubject.Publish().RefCount();
-        
+
         public IObservable<string> PlaybackError() => _errorSubject.Publish().RefCount();
 
         public IObservable<int> BufferingProgress() => _bufferingSubject.Publish().RefCount();
-        
+
         public void SetWindow(Window window) => _window = window;
     }
 }
