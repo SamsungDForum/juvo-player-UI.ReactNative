@@ -110,20 +110,22 @@ namespace PlayerService
             Logger.LogExit();
         }
 
-        private async Task OnEvent(IEvent ev)
+        private Task OnEvent(IEvent ev)
         {
             Logger.Info(ev.ToString());
 
             switch (ev)
             {
                 case EosEvent _:
-                    await ThreadJob(_playerStateSubject.OnCompleted);
+                    Logger.Info("EOS observed");
                     break;
 
                 case BufferingEvent buf:
                     _bufferingSubject.OnNext(buf.IsBuffering ? 0 : 100);
                     break;
             }
+
+            return Task.CompletedTask;
         }
 
         private async Task<TResult> ThreadJob<TResult>(Func<TResult> threadFunction)
@@ -152,9 +154,9 @@ namespace PlayerService
             return result;
         }
 
-        private Task ThreadJob(Action threadAction)
+        private async Task ThreadJob(Action threadAction)
         {
-            return _playerThread.Factory.StartNew(_threadActionInvoker, threadAction);
+            await _playerThread.Factory.StartNew(_threadActionInvoker, threadAction);
         }
 
         private readonly Action<object> _threadActionInvoker;
