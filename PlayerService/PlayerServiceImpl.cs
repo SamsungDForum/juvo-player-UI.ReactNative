@@ -270,8 +270,15 @@ namespace PlayerService
             {
                 IPlayer player = BuildDashPlayer(clip);
                 _playerEventSubscription = SubscribePlayerEvents(player);
-
-                await player.Prepare();
+                try
+                {
+                    await player.Prepare();
+                }
+                catch (Exception)
+                {
+                    await player.DisposeAsync();
+                    throw;
+                }
 
                 _player = player;
                 _currentClip = clip;
