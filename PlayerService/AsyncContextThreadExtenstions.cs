@@ -25,24 +25,17 @@ namespace PlayerService
 {
     public static class AsyncContextThreadExtenstions
     {
-        public static async Task<TResult> ThreadJob<TResult>(this AsyncContextThread thread, Func<TResult> threadFunction) =>
-            await thread.Factory.StartNew(threadFunction);
+        // Wrappers allowing awaiting for execution completion of action/function payloads running context thread.
+        // As such "minimal" context thread action will be of form Task<Task> / Task<Task<TResult>>.
+        // First Task represents context thread launch. Inner Task/Task<TResult> represents context thread operaation
+        // Async payloads will have inner task in form of Task<Task> / Task<Task<TResult>
+        private static async Task RunAction(Action threadAction) => threadAction();
+        private static async Task<TResult> RunFunction<TResult>(Func<TResult> threadFunction) => threadFunction();
 
-        public static async Task ThreadJob(this AsyncContextThread thread, Action threadAction) =>
-            await thread.Factory.StartNew(threadAction);
-
-        public static async Task ReportException(this Task threadJob, Subject<string> reportTo)
-        {
-            try
-            {
-                await threadJob;
-            }
-            catch (Exception e)
-            {
-                Logger.Error($"{e.GetType()} {e.Message}");
-                reportTo.OnNext(e.Message);
-            }
-        }
+        public static Task<Task<TResult>> ThreadJob<TResult>(this AsyncContextThread thread, Func<TResult> threadFunction) =>
+            thread.Factory.StartNew(() => RunFunction(threadFunction));
+        public static Task<Task> ThreadJob(this AsyncContextThread thread, Action threadAction) =>
+            thread.Factory.StartNew(() => RunAction(threadAction));
 
         public static async Task ReportException(this Task<Task> threadJob, Subject<string> reportTo)
         {
@@ -57,11 +50,24 @@ namespace PlayerService
             }
         }
 
-        public static async Task<TResult> ReportException<TResult>(this Task<TResult> threadJob, Subject<string> reportTo)
+        public static async Task ReportException(this Task<Task<Task>> threadJob, Subject<string> reportTo)
         {
             try
             {
-                return await threadJob;
+                await await await threadJob;
+            }
+            catch (Exception e)
+            {
+                Logger.Error($"{e.GetType()} {e.Message}");
+                reportTo.OnNext(e.Message);
+            }
+        }
+
+        public static async Task<TResult> ReportException<TResult>(this Task<Task<TResult>> threadJob, Subject<string> reportTo)
+        {
+            try
+            {
+                return await await threadJob;
             }
             catch (Exception e)
             {
@@ -72,11 +78,11 @@ namespace PlayerService
             return default;
         }
 
-        public static async Task<TResult> ReportException<TResult>(this Task<Task<TResult>> threadJob, Subject<string> reportTo)
+        public static async Task<TResult> ReportException<TResult>(this Task<Task<Task<TResult>>> threadJob, Subject<string> reportTo)
         {
             try
             {
-                return await await threadJob;
+                return await await await threadJob;
             }
             catch (Exception e)
             {
