@@ -9,7 +9,6 @@ using ILogger = JuvoLogger.ILogger;
 using ElmSharp;
 using ReactNative.Modules.Core;
 using Newtonsoft.Json.Linq;
-using PlayerService;
 using Tizen.Applications;
 using UI.Common;
 
@@ -62,7 +61,7 @@ namespace JuvoReactNative
 
         private void InitializeJuvoPlayer()
         {
-            Player = new PlayerServiceImpl();
+            Player = new PlayerService.PlayerService();
             Player.SetWindow(window);
             playerStateChangeSub = Player.StateChanged()
                .Subscribe(OnPlayerStateChanged, OnPlaybackCompleted);
