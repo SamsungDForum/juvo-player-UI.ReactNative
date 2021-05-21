@@ -242,8 +242,8 @@ namespace JuvoReactNative
             Logger.Info($"{(JuvoPlayer.Common.StreamType)StreamTypeIndex}");
             try
             {
-                var index = (JuvoPlayer.Common.StreamType)StreamTypeIndex;
-                if (index == JuvoPlayer.Common.StreamType.Subtitle)
+                var streamType = (JuvoPlayer.Common.StreamType)StreamTypeIndex;
+                if (streamType == JuvoPlayer.Common.StreamType.Subtitle)
                 {
                     this.allStreamsDescriptions[StreamTypeIndex] = new List<StreamDescription>
                     {
@@ -252,16 +252,16 @@ namespace JuvoReactNative
                             Default = true,
                             Description = "off",
                             Id = "0",
-                            StreamType = index
+                            StreamType = streamType
                         }
                     };
 
-                    this.allStreamsDescriptions[StreamTypeIndex].AddRange(Player.GetStreamsDescription(index).Result);
+                    this.allStreamsDescriptions[StreamTypeIndex].AddRange(Player.GetStreamsDescription(streamType).Result);
                 }
                 else
                 {
                     this.allStreamsDescriptions[StreamTypeIndex] = 
-                        Player.GetStreamsDescription(index).Result;
+                        Player.GetStreamsDescription(streamType).Result;
 
                 }
                 var param = new JObject();
