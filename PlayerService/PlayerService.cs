@@ -103,7 +103,7 @@ namespace PlayerService
             Logger.LogExit();
         }
 
-        private Task OnEvent(IEvent ev)
+        private void OnEvent(IEvent ev)
         {
             Logger.Info(ev.ToString());
 
@@ -117,12 +117,10 @@ namespace PlayerService
                     _bufferingSubject.OnNext(buf.IsBuffering ? 0 : 100);
                     break;
             }
-
-            return Task.CompletedTask;
         }
 
         private IDisposable SubscribePlayerEvents(IPlayer player) =>
-            player.OnEvent().Subscribe(async (e) => await OnEvent(e));
+            player.OnEvent().Subscribe(OnEvent);
 
         public void Dispose()
         {
@@ -147,52 +145,62 @@ namespace PlayerService
         public PlayerState State => _playerStateSubject.Value;
         public string CurrentCueText { get; }
 
-        public async Task Pause()
+        public Task Pause()
         {
-            Logger.LogEnter();
-
-            await _playerThread
-                .ThreadJob(async () => await _player.Pause())
-                .ReportException(_errorSubject);
-            
-            Logger.LogExit();
-        }
-
-        public async Task SeekTo(TimeSpan to)
-        {
-            Logger.LogEnter();
-
-            await _playerThread
-                .ThreadJob(async () => await _player.Seek(to))
-                .ReportException(_errorSubject);
-
-            Logger.LogExit();
-        }
-
-        public async Task ChangeActiveStream(StreamDescription streamDescription)
-        {
-            Logger.LogEnter($"Selecting {streamDescription.StreamType} {streamDescription.Description}");
-
-            await _playerThread.ThreadJob(async () =>
+            async Task PlayerPause()
             {
-                var selected = _player.GetStreamGroups().SelectStream(
-                    streamDescription.StreamType.ToContentType(),
-                    streamDescription.Id.ToString());
+                Logger.LogEnter();
+                await _player.Pause();
+                Logger.LogExit();
+            }
+
+            // Task - Pause operation
+            return _playerThread.ThreadJob(async () => await PlayerPause().ReportException(_errorSubject)).Result;
+        }
+
+        public Task SeekTo(TimeSpan to)
+        {
+            async Task PlayerSeek(TimeSpan seekTo)
+            {
+                Logger.LogEnter();
+                await _player.Seek(seekTo);
+                Logger.LogExit();
+            }
+
+            // Task - Seek operation
+            return _playerThread.ThreadJob(async () => PlayerSeek(to).ReportException(_errorSubject)).Result;
+        }
+
+        public Task ChangeActiveStream(StreamDescription streamDescription)
+        {
+            async Task PlayerChangeActiveStream(StreamDescription targetStream)
+            {
+                Logger.LogEnter($"Selecting {targetStream.StreamType} {targetStream.Description}");
+                var selected = _player.GetStreamGroups()
+                    .SelectStream(
+                        targetStream.StreamType.ToContentType(),
+                        targetStream.Id);
 
                 if (selected.selector == null)
                 {
-                    Logger.Warn($"Stream index not found {streamDescription.StreamType} {streamDescription.Description}");
+                    Logger.Warn($"Stream index not found {targetStream.StreamType} {targetStream.Description}");
                     return;
                 }
 
-                var (newGroups, newSelectors) = _player.GetSelectedStreamGroups().UpdateSelection(selected);
+                var (newGroups, newSelectors) = _player
+                    .GetSelectedStreamGroups()
+                    .UpdateSelection(selected);
 
-                Logger.Info($"Using {selected.selector.GetType()} for {streamDescription.StreamType} {streamDescription.Description}");
+                Logger.Info($"Using {selected.selector.GetType()} for {targetStream.StreamType} {targetStream.Description}");
 
                 await _player.SetStreamGroups(newGroups, newSelectors);
-            }).ReportException(_errorSubject);
+                Logger.LogExit();
+            }
 
-            Logger.LogExit();
+            // Task - change stream operation.
+            return _playerThread
+                .ThreadJob(async () => await PlayerChangeActiveStream(streamDescription).ReportException(_errorSubject))
+                .Result;
         }
 
         public void DeactivateStream(StreamType streamType)
@@ -200,27 +208,36 @@ namespace PlayerService
             throw new NotImplementedException();
         }
 
-        public async Task<List<StreamDescription>> GetStreamsDescription(StreamType streamType)
+        public Task<List<StreamDescription>> GetStreamsDescription(StreamType streamType)
         {
-            Logger.LogEnter($"{streamType}");
+            async Task<List<StreamDescription>> PlayerGetStramDescription(StreamType stream)
+            {
+                Logger.LogEnter($"{stream}");
 
-            var result = await _playerThread
-                .ThreadJob(async () => _player.GetStreamGroups().GetStreamDescriptionsFromStreamType(streamType))
-                .ReportException(_errorSubject);
+                var description = _player
+                    .GetStreamGroups()
+                    .GetStreamDescriptionsFromStreamType(stream)
+                    .ToList();
 
-            Logger.LogExit();
+                Logger.LogExit($"{stream} {description.Count} entries");
 
-            return result.ToList();
+                return description;
+            }
+
+            // Task<List<StreamDescription>> - get stream task
+            return _playerThread
+                .ThreadJob(async () => await PlayerGetStramDescription(streamType).ReportException(_errorSubject)).Result;
         }
 
-        public async Task SetSource(ClipDefinition clip)
+        public Task SetSource(ClipDefinition clip)
         {
-            Logger.LogEnter(clip.Url);
-
-            await _playerThread.ThreadJob(async () =>
+            async Task PlayerSetSource(ClipDefinition source)
             {
-                IPlayer player = BuildDashPlayer(clip);
+                Logger.LogEnter(source.Url);
+
+                IPlayer player = BuildDashPlayer(source);
                 _playerEventSubscription = SubscribePlayerEvents(player);
+
                 try
                 {
                     await player.Prepare();
@@ -231,60 +248,71 @@ namespace PlayerService
                     throw;
                 }
 
+                _currentClip = source;
                 _player = player;
-                _currentClip = clip;
+                Logger.LogExit(source.Url);
                 _playerStateSubject.OnNext(PlayerState.Ready);
-            }).ReportException(_errorSubject);
+            }
 
-            Logger.LogExit();
+            // Task<Task> - wrapped set source operation.
+            return _playerThread.ThreadJob(async () => await PlayerSetSource(clip).ReportException(_errorSubject));
         }
 
-        public async Task Start()
+        public Task Start()
         {
-            Logger.LogEnter();
-
-            await _playerThread.ThreadJob(() =>
+            async Task PlayerStart()
             {
+                Logger.LogEnter();
+
                 _player.Play();
+
+                Logger.LogExit();
                 _playerStateSubject.OnNext(PlayerState.Playing);
-            }).ReportException(_errorSubject);
+            }
 
-            Logger.LogExit();
+            // Task - start operation.
+            return _playerThread.ThreadJob(async () => await PlayerStart().ReportException(_errorSubject)).Result;
         }
 
-        public async Task Stop()
+        public Task Stop()
         {
-            Logger.LogEnter();
-
-            await _playerThread
-                .ThreadJob(_playerStateSubject.OnCompleted)
-                .ReportException(_errorSubject);
-            
-            Logger.LogExit();
-        }
-
-        public async Task Suspend()
-        {
-            Logger.LogEnter();
-
-            await _playerThread.ThreadJob(async () =>
+            async Task PlayerStop()
             {
+                Logger.LogEnter();
+
+                _playerStateSubject.OnCompleted();
+
+                Logger.LogExit();
+            }
+
+            // Task - stop operation.
+            return _playerThread.ThreadJob(async () => await PlayerStop().ReportException(_errorSubject)).Result;
+        }
+
+        public Task Suspend()
+        {
+            async Task PlayerSuspend()
+            {
+                Logger.LogEnter();
+
                 _suspendTimeIndex = _player.Position ?? TimeSpan.Zero;
                 await TerminatePlayer();
 
                 Logger.Info($"Suspended {_suspendTimeIndex}@{_currentClip.Url}");
-            }).ReportException(_errorSubject);
+                Logger.LogExit();
+            }
 
-            Logger.LogExit();
+            // Task - Suspend operation.
+            return _playerThread.ThreadJob(async () => await PlayerSuspend().ReportException(_errorSubject)).Result;
         }
 
-        public async Task Resume()
+        public Task Resume()
         {
-            Logger.LogEnter();
-
-            await _playerThread.ThreadJob(async () =>
+            async Task PlayerResume()
             {
-                IPlayer player = BuildDashPlayer(_currentClip, new Configuration {StartTime = _suspendTimeIndex});
+                Logger.LogEnter();
+
+                IPlayer player = BuildDashPlayer(_currentClip, new Configuration { StartTime = _suspendTimeIndex });
                 _playerEventSubscription = SubscribePlayerEvents(player);
 
                 await player.Prepare();
@@ -293,18 +321,16 @@ namespace PlayerService
                 // Can be expanded to restore track selection / playback state (Paused/Playing)
 
                 Logger.Info($"Resumed {_suspendTimeIndex}@{_currentClip.Url}");
-            }).ReportException(_errorSubject);
+                Logger.LogExit();
+            }
 
-            
-            Logger.LogExit();
+            // Task - resume operation
+            return _playerThread.ThreadJob(async () => await PlayerResume().ReportException(_errorSubject)).Result;
         }
 
         public IObservable<PlayerState> StateChanged() => _playerStateSubject.Publish().RefCount();
-
         public IObservable<string> PlaybackError() => _errorSubject.Publish().RefCount();
-
         public IObservable<int> BufferingProgress() => _bufferingSubject.Publish().RefCount();
-
         public void SetWindow(Window window) => _window = window;
     }
 }

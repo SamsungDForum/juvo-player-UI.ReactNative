@@ -36,10 +36,10 @@ export default class PlaybackView extends React.Component {
     this.JuvoPlayer = NativeModules.JuvoPlayer;
     this.JuvoEventEmitter = new NativeEventEmitter(this.JuvoPlayer);
     this.streamsData = {
-      Audio: [],
+      Unknown: [],
       Video: [],
+      Audio: [],
       Subtitle: [],
-      Teletext: [],
       Count: 4,
       selectedIndex: -1
     };
@@ -256,6 +256,7 @@ export default class PlaybackView extends React.Component {
     }
   }
   onGotStreamsDescription(streams) {
+    this.JuvoPlayer.Log('onGotStreamsDescription: '+streams.StreamTypeIndex);
     var StreamType = Native.JuvoPlayer.Common.StreamType;
     switch (streams.StreamTypeIndex) {
       case StreamType.Audio:

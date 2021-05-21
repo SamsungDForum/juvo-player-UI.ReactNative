@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using ReactNative;
 using ReactNative.Bridge;
@@ -25,7 +26,9 @@ namespace JuvoReactNative
         EcoreEvent<EcoreKeyEventArgs> _keyDown;
         EcoreEvent<EcoreKeyEventArgs> _keyUp;
         Window window = ReactProgram.RctWindow; //The main window of the application has to be transparent.
-        List<StreamDescription>[] allStreamsDescriptions = { null, null, null };
+
+        // assumes StreamType values are sequential [0..N]
+        List<StreamDescription>[] allStreamsDescriptions = new List<StreamDescription>[Enum.GetValues(typeof(StreamType)).Length];
         public IPlayerService Player { get; private set; }
         private IDisposable seekCompletedSub;
         private IDisposable playerStateChangeSub;
@@ -124,7 +127,7 @@ namespace JuvoReactNative
             switch (state)
             {
                 case PlayerState.Ready:
-                    Player?.Start();
+                    Player?.Start().Wait();
                     playbackTimer?.Change(0, interval); //resume progress info update
                     value = "Prepared";
                     break;
@@ -176,12 +179,12 @@ namespace JuvoReactNative
         public void OnResume()
         {
             Logger.Info("");
-            Player?.Resume();
+            Player?.Resume().Wait();
         }
         public void OnSuspend()
         {
             Logger.Info("");
-            Player?.Suspend();
+            Player?.Suspend().Wait();
         }
 
         private void UpdateBufferingProgress(int percent)
@@ -236,31 +239,40 @@ namespace JuvoReactNative
         [ReactMethod]
         public void GetStreamsDescription(int StreamTypeIndex)
         {
-            var index = (JuvoPlayer.Common.StreamType)StreamTypeIndex;
-            if (index == JuvoPlayer.Common.StreamType.Subtitle)
+            Logger.Info($"{(JuvoPlayer.Common.StreamType)StreamTypeIndex}");
+            try
             {
-                this.allStreamsDescriptions[StreamTypeIndex] = new List<StreamDescription>
+                var index = (JuvoPlayer.Common.StreamType)StreamTypeIndex;
+                if (index == JuvoPlayer.Common.StreamType.Subtitle)
                 {
-                    new StreamDescription
+                    this.allStreamsDescriptions[StreamTypeIndex] = new List<StreamDescription>
                     {
-                        Default = true,
-                        Description = "off",
-                        Id = "0",
-                        StreamType = (StreamType)StreamTypeIndex
-                    }
-                };
-                this.allStreamsDescriptions[StreamTypeIndex].AddRange(
-                    Player.GetStreamsDescription((StreamType)StreamTypeIndex).GetAwaiter().GetResult());
+                        new StreamDescription
+                        {
+                            Default = true,
+                            Description = "off",
+                            Id = "0",
+                            StreamType = index
+                        }
+                    };
+
+                    this.allStreamsDescriptions[StreamTypeIndex].AddRange(Player.GetStreamsDescription(index).Result);
+                }
+                else
+                {
+                    this.allStreamsDescriptions[StreamTypeIndex] = 
+                        Player.GetStreamsDescription(index).Result;
+
+                }
+                var param = new JObject();
+                param.Add("Description", Newtonsoft.Json.JsonConvert.SerializeObject(this.allStreamsDescriptions[StreamTypeIndex]));
+                param.Add("StreamTypeIndex", StreamTypeIndex);
+                SendEvent("onGotStreamsDescription", param);
             }
-            else
+            catch (Exception e)
             {
-                this.allStreamsDescriptions[StreamTypeIndex] = 
-                    Player.GetStreamsDescription((StreamType)StreamTypeIndex).GetAwaiter().GetResult();
+                Logger.Error(e);
             }
-            var param = new JObject();
-            param.Add("Description", Newtonsoft.Json.JsonConvert.SerializeObject(this.allStreamsDescriptions[StreamTypeIndex]));
-            param.Add("StreamTypeIndex", (int)StreamTypeIndex);
-            SendEvent("onGotStreamsDescription", param);
         }
         [ReactMethod]
         public void SetStream(int SelectedIndex, int StreamTypeIndex)
@@ -279,7 +291,7 @@ namespace JuvoReactNative
                     }
                 }
                 var stream = (StreamDescription)this.allStreamsDescriptions[StreamTypeIndex][SelectedIndex];
-                Player.ChangeActiveStream(stream);
+                Player.ChangeActiveStream(stream).Wait();
             }
         }
         [ReactMethod]
@@ -325,10 +337,10 @@ namespace JuvoReactNative
             switch (Player.State)
             {
                 case JuvoPlayer.Common.PlayerState.Playing:
-                    Player.Pause();
+                    Player.Pause().Wait();
                     break;
                 case JuvoPlayer.Common.PlayerState.Paused:
-                    Player.Start();
+                    Player.Start().Wait();
                     break;
             }
         }
