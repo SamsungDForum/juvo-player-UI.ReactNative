@@ -23,7 +23,7 @@ using static PlayerService.PlayerServiceToolBox;
 
 namespace PlayerService
 {
-    public static class AsyncContextThreadExtenstions
+    public static class AsyncContextThreadExtensions
     {
         public static Task<TResult> ThreadJob<TResult>(this AsyncContextThread thread, Func<TResult> threadFunction) =>
             thread.Factory.StartNew(threadFunction, TaskCreationOptions.DenyChildAttach);
