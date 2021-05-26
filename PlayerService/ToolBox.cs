@@ -24,7 +24,7 @@ using UI.Common;
 
 namespace PlayerService
 {
-    internal static class LogToolBox
+    public static class LogToolBox
     {
         public static void LogEnter(
             this ILogger logger,

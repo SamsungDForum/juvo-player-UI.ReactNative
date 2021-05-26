@@ -126,7 +126,7 @@ namespace PlayerService
         {
             Logger.LogEnter();
 
-            _playerThread.ThreadJob(async () => await TerminatePlayer());
+            _playerThread.ThreadJob(TerminatePlayer);
 
             _playerThread.Join();
 
@@ -145,35 +145,44 @@ namespace PlayerService
         public PlayerState State => _playerStateSubject.Value;
         public string CurrentCueText { get; }
 
-        public Task Pause()
+        public async Task Pause()
         {
-            async Task PlayerPause()
+            async Task PauseJob()
             {
                 Logger.LogEnter();
+
                 await _player.Pause();
+                _playerStateSubject.OnNext(PlayerState.Paused);
+
                 Logger.LogExit();
             }
 
-            // Task - Pause operation
-            return _playerThread.ThreadJob(async () => await PlayerPause().ReportException(_errorSubject)).Result;
+            var job = await _playerThread
+                .ThreadJob(() => PauseJob().ReportException(_errorSubject))
+                .ConfigureAwait(false);
+
+            await job.ConfigureAwait(false);
         }
 
-        public Task SeekTo(TimeSpan to)
+        public async Task SeekTo(TimeSpan to)
         {
-            async Task PlayerSeek(TimeSpan seekTo)
+            async Task SeekJob(TimeSpan seekTo)
             {
                 Logger.LogEnter();
                 await _player.Seek(seekTo);
                 Logger.LogExit();
             }
 
-            // Task - Seek operation
-            return _playerThread.ThreadJob(async () => PlayerSeek(to).ReportException(_errorSubject)).Result;
+            var job = await _playerThread
+                .ThreadJob(() => SeekJob(to).ReportException(_errorSubject))
+                .ConfigureAwait(false);
+
+            await job.ConfigureAwait(false);
         }
 
-        public Task ChangeActiveStream(StreamDescription streamDescription)
+        public async Task ChangeActiveStream(StreamDescription streamDescription)
         {
-            async Task PlayerChangeActiveStream(StreamDescription targetStream)
+            async Task ChangeStreamJob(StreamDescription targetStream)
             {
                 Logger.LogEnter($"Selecting {targetStream.StreamType} {targetStream.Description}");
                 var selected = _player.GetStreamGroups()
@@ -194,13 +203,15 @@ namespace PlayerService
                 Logger.Info($"Using {selected.selector.GetType()} for {targetStream.StreamType} {targetStream.Description}");
 
                 await _player.SetStreamGroups(newGroups, newSelectors);
+
                 Logger.LogExit();
             }
 
-            // Task - change stream operation.
-            return _playerThread
-                .ThreadJob(async () => await PlayerChangeActiveStream(streamDescription).ReportException(_errorSubject))
-                .Result;
+            var job = await _playerThread
+                .ThreadJob(() => ChangeStreamJob(streamDescription).ReportException(_errorSubject))
+                .ConfigureAwait(false);
+
+            await job.ConfigureAwait(false);
         }
 
         public void DeactivateStream(StreamType streamType)
@@ -208,9 +219,9 @@ namespace PlayerService
             throw new NotImplementedException();
         }
 
-        public Task<List<StreamDescription>> GetStreamsDescription(StreamType streamType)
+        public async Task<List<StreamDescription>> GetStreamsDescription(StreamType streamType)
         {
-            async Task<List<StreamDescription>> PlayerGetStramDescription(StreamType stream)
+            async Task<List<StreamDescription>> GetStreamsJob(StreamType stream)
             {
                 Logger.LogEnter($"{stream}");
 
@@ -224,14 +235,16 @@ namespace PlayerService
                 return description;
             }
 
-            // Task<List<StreamDescription>> - get stream task
-            return _playerThread
-                .ThreadJob(async () => await PlayerGetStramDescription(streamType).ReportException(_errorSubject)).Result;
+            var job = await _playerThread
+                .ThreadJob(() => GetStreamsJob(streamType).ReportException(_errorSubject))
+                .ConfigureAwait(false);
+
+            return await job.ConfigureAwait(false);
         }
 
-        public Task SetSource(ClipDefinition clip)
+        public async Task SetSource(ClipDefinition clip)
         {
-            async Task PlayerSetSource(ClipDefinition source)
+            async Task SetSourceJob(ClipDefinition source)
             {
                 Logger.LogEnter(source.Url);
 
@@ -242,41 +255,49 @@ namespace PlayerService
                 {
                     await player.Prepare();
                 }
-                catch (Exception)
+                catch (Exception e)
                 {
+                    Logger.Error($"Prepare failed {e.Message}");
                     await player.DisposeAsync();
                     throw;
                 }
 
                 _currentClip = source;
                 _player = player;
-                Logger.LogExit(source.Url);
                 _playerStateSubject.OnNext(PlayerState.Ready);
+
+                Logger.LogExit(source.Url);
             }
 
-            // Task<Task> - wrapped set source operation.
-            return _playerThread.ThreadJob(async () => await PlayerSetSource(clip).ReportException(_errorSubject));
+            var job = await _playerThread
+                .ThreadJob(() => SetSourceJob(clip).ReportException(_errorSubject))
+                .ConfigureAwait(false);
+
+            await job.ConfigureAwait(false);
         }
 
-        public Task Start()
+        public async Task Start()
         {
-            async Task PlayerStart()
+            async Task StartJob()
             {
                 Logger.LogEnter();
 
                 _player.Play();
+                _playerStateSubject.OnNext(PlayerState.Playing);
 
                 Logger.LogExit();
-                _playerStateSubject.OnNext(PlayerState.Playing);
             }
 
-            // Task - start operation.
-            return _playerThread.ThreadJob(async () => await PlayerStart().ReportException(_errorSubject)).Result;
+            var job = await _playerThread
+                .ThreadJob(() => StartJob().ReportException(_errorSubject))
+                .ConfigureAwait(false);
+
+            await job.ConfigureAwait(false);
         }
 
-        public Task Stop()
+        public async Task Stop()
         {
-            async Task PlayerStop()
+            async Task StopJob()
             {
                 Logger.LogEnter();
 
@@ -285,13 +306,16 @@ namespace PlayerService
                 Logger.LogExit();
             }
 
-            // Task - stop operation.
-            return _playerThread.ThreadJob(async () => await PlayerStop().ReportException(_errorSubject)).Result;
+            var job = await _playerThread
+                .ThreadJob(() => StopJob().ReportException(_errorSubject))
+                .ConfigureAwait(false);
+
+            await job.ConfigureAwait(false);
         }
 
-        public Task Suspend()
+        public async Task Suspend()
         {
-            async Task PlayerSuspend()
+            async Task SuspendJob()
             {
                 Logger.LogEnter();
 
@@ -302,13 +326,16 @@ namespace PlayerService
                 Logger.LogExit();
             }
 
-            // Task - Suspend operation.
-            return _playerThread.ThreadJob(async () => await PlayerSuspend().ReportException(_errorSubject)).Result;
+            var job = await _playerThread
+                .ThreadJob(() => SuspendJob().ReportException(_errorSubject))
+                .ConfigureAwait(false);
+
+            await job.ConfigureAwait(false);
         }
 
-        public Task Resume()
+        public async Task Resume()
         {
-            async Task PlayerResume()
+            async Task ResumeJob()
             {
                 Logger.LogEnter();
 
@@ -324,8 +351,11 @@ namespace PlayerService
                 Logger.LogExit();
             }
 
-            // Task - resume operation
-            return _playerThread.ThreadJob(async () => await PlayerResume().ReportException(_errorSubject)).Result;
+            var job = await _playerThread
+                .ThreadJob(() => ResumeJob().ReportException(_errorSubject))
+                .ConfigureAwait(false);
+
+            await job.ConfigureAwait(false);
         }
 
         public IObservable<PlayerState> StateChanged() => _playerStateSubject.Publish().RefCount();

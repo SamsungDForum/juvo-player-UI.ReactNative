@@ -1,7 +1,24 @@
+/*!
+ * https://github.com/SamsungDForum/JuvoPlayer
+ * Copyright 2021, Samsung Electronics Co., Ltd
+ * Licensed under the MIT license
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using ReactNative;
 using ReactNative.Bridge;
 using JuvoPlayer.Common;
@@ -12,6 +29,7 @@ using ReactNative.Modules.Core;
 using Newtonsoft.Json.Linq;
 using Tizen.Applications;
 using UI.Common;
+using static PlayerService.LogToolBox;
 
 namespace JuvoReactNative
 {
@@ -62,29 +80,6 @@ namespace JuvoReactNative
             SendEvent("handleDeepLink", new JObject { { "url", url } });
         }
 
-        private void InitializeJuvoPlayer()
-        {
-            Player = new PlayerService.PlayerService();
-            Player.SetWindow(window);
-            playerStateChangeSub = Player.StateChanged()
-               .Subscribe(OnPlayerStateChanged, OnPlaybackCompleted);
-            playbackErrorsSub = Player.PlaybackError()
-                .Subscribe(message =>
-                {
-                    var param = new JObject();
-                    param.Add("Message", message);
-                    SendEvent("onPlaybackError", param);
-                });
-            bufferingProgressSub = Player.BufferingProgress()
-                .Subscribe(UpdateBufferingProgress);
-
-            playbackTimer = new Timer(
-                callback: new TimerCallback(UpdatePlayTime),
-                state: seekLogic.CurrentPositionUI,
-                dueTime: Timeout.Infinite,
-                period: Timeout.Infinite);
-
-        }
         public override string Name
         {
             get
@@ -92,13 +87,17 @@ namespace JuvoReactNative
                 return "JuvoPlayer";
             }
         }
+
         private void SendEvent(string eventName, JObject parameters)
         {
             Context.GetJavaScriptModule<RCTDeviceEventEmitter>()
                 .emit(eventName, parameters);
         }
+
         public override void Initialize()
         {
+            Logger.LogEnter();
+
             Context.AddLifecycleEventListener(this);
             _keyDown = new EcoreEvent<EcoreKeyEventArgs>(EcoreEventType.KeyDown, EcoreKeyEventArgs.Create);
             _keyDown.On += (s, e) =>
@@ -118,37 +117,32 @@ namespace JuvoReactNative
                 param.Add("KeyCode", e.KeyCode);
                 SendEvent("onTVKeyUp", param);
             };
+
+            Logger.LogExit();
         }
         private void OnPlayerStateChanged(PlayerState state)
         {
-            Logger.Info($"{state}");
-            string value = "Idle";
+            var stateStr = state.ToString();
+
+            Logger.Info(stateStr);
             int interval = 100;
             switch (state)
             {
                 case PlayerState.Ready:
-                    Player?.Start().Wait();
-                    playbackTimer?.Change(0, interval); //resume progress info update
-                    value = "Prepared";
-                    break;
-
-                case PlayerState.Playing:
-                    value = "Playing";
-                    break;
-                case PlayerState.Paused:
-                    value = "Paused";
+                    playbackTimer.Change(0, interval); //resume progress info update
                     break;
 
                 // "Stop" clears active Player preventing dispatch of extra stop calls.
                 case PlayerState.Idle:
-                    playbackTimer?.Change(Timeout.Infinite, Timeout.Infinite); //suspend progress info update
+                    playbackTimer.Change(Timeout.Infinite, Timeout.Infinite); //suspend progress info update
                     break;
             }
 
-            Logger.Info($"onPlayerStateChanged('{value}')");
             var param = new JObject();
-            param.Add("State", value);
+            param.Add("State", stateStr);
             SendEvent("onPlayerStateChanged", param);
+
+            Logger.LogExit(stateStr);
         }
 
         private void OnPlaybackCompleted()
@@ -176,15 +170,27 @@ namespace JuvoReactNative
             Player?.Dispose();
             Player = null;
         }
+
         public void OnResume()
         {
-            Logger.Info("");
-            Player?.Resume().Wait();
+            bool havePlayer = Player != null;
+            Logger.LogEnter($"Have player: {havePlayer}");
+
+            if (havePlayer)
+                WaitHandle.WaitAll(new[] { ((IAsyncResult)Player.Resume()).AsyncWaitHandle });
+            
+            Logger.LogExit();
         }
+
         public void OnSuspend()
         {
-            Logger.Info("");
-            Player?.Suspend().Wait();
+            bool havePlayer = Player != null;
+            Logger.LogEnter($"Have player: {havePlayer}");
+
+            if (havePlayer)
+                WaitHandle.WaitAll(new[] { ((IAsyncResult)Player.Suspend()).AsyncWaitHandle });
+
+            Logger.LogExit();
         }
 
         private void UpdateBufferingProgress(int percent)
@@ -207,27 +213,7 @@ namespace JuvoReactNative
             param.Add("SubtiteText", txt);
             SendEvent("onUpdatePlayTime", param);
         }
-        private void Play(string videoURI, List<DrmDescription> drmDataList, string streamingProtocol)
-        {
-            try
-            {
-                if (videoURI == null) return;
-                if (Player?.State == PlayerState.Playing) return;
-                InitializeJuvoPlayer();
-                Player.SetSource(new ClipDefinition
-                {
-                    Type = streamingProtocol,
-                    Url = videoURI,
-                    Subtitles = new List<SubtitleInfo>(),
-                    DRMDatas = drmDataList
-                });
-            }
-            catch (Exception e)
-            {
-                Logger?.Error(Tag, e.Message);
-            }
-        }
-
+       
         public void OnError(Exception error)
         {
             var param = new JObject();
@@ -237,87 +223,143 @@ namespace JuvoReactNative
 
         //////////////////JS methods//////////////////
         [ReactMethod]
-        public void GetStreamsDescription(int StreamTypeIndex)
+        public async void PlayerStart(IPromise promise)
         {
-            Logger.Info($"{(JuvoPlayer.Common.StreamType)StreamTypeIndex}");
-            try
-            {
-                var streamType = (JuvoPlayer.Common.StreamType)StreamTypeIndex;
-                if (streamType == JuvoPlayer.Common.StreamType.Subtitle)
-                {
-                    this.allStreamsDescriptions[StreamTypeIndex] = new List<StreamDescription>
-                    {
-                        new StreamDescription
-                        {
-                            Default = true,
-                            Description = "off",
-                            Id = "0",
-                            StreamType = streamType
-                        }
-                    };
+            Logger.LogEnter();
 
-                    this.allStreamsDescriptions[StreamTypeIndex].AddRange(Player.GetStreamsDescription(streamType).Result);
+            await Player.Start().ConfigureAwait(false);
+            promise.Resolve(default);
+            
+            Logger.LogExit();
+        }
+        
+        [ReactMethod]
+        public async void GetStreamsDescription(int StreamTypeIndex, IPromise promise)
+        {
+            JuvoPlayer.Common.StreamType streamType;
+            
+            Logger.LogEnter($"{streamType = (JuvoPlayer.Common.StreamType)StreamTypeIndex}");
+
+            if (streamType == JuvoPlayer.Common.StreamType.Subtitle)
+            {
+                this.allStreamsDescriptions[StreamTypeIndex] = new List<StreamDescription>
+                {
+                    new StreamDescription
+                    {
+                        Default = true,
+                        Description = "off",
+                        Id = "0",
+                        StreamType = streamType
+                    }
+                };
+
+                this.allStreamsDescriptions[StreamTypeIndex].AddRange(
+                    await Player.GetStreamsDescription(streamType).ConfigureAwait(false));
+            }
+            else
+            {
+                this.allStreamsDescriptions[StreamTypeIndex] = 
+                    await Player.GetStreamsDescription(streamType).ConfigureAwait(false);
+            }
+
+            var param = new JObject();
+            param.Add("Description", Newtonsoft.Json.JsonConvert.SerializeObject(this.allStreamsDescriptions[StreamTypeIndex]));
+            param.Add("StreamTypeIndex", StreamTypeIndex);
+            promise.Resolve(param);
+            
+            Logger.LogExit($"{streamType}");
+        }
+
+        [ReactMethod]
+        public async void SetStream(int SelectedIndex, int StreamTypeIndex, IPromise promise)
+        {
+            JuvoPlayer.Common.StreamType streamType;
+            bool haveStreamData = this.allStreamsDescriptions[StreamTypeIndex] != null && SelectedIndex != -1;
+            
+            Logger.LogEnter($"{streamType = (JuvoPlayer.Common.StreamType)StreamTypeIndex} Have data: {haveStreamData}");
+
+            if (haveStreamData)
+            {
+                if (streamType == JuvoPlayer.Common.StreamType.Subtitle && SelectedIndex == 0)
+                { 
+                    Player.DeactivateStream(StreamType.Subtitle);
                 }
                 else
                 {
-                    this.allStreamsDescriptions[StreamTypeIndex] = 
-                        Player.GetStreamsDescription(streamType).Result;
-
+                    await Player
+                        .ChangeActiveStream(this.allStreamsDescriptions[StreamTypeIndex][SelectedIndex])
+                        .ConfigureAwait(false);
                 }
-                var param = new JObject();
-                param.Add("Description", Newtonsoft.Json.JsonConvert.SerializeObject(this.allStreamsDescriptions[StreamTypeIndex]));
-                param.Add("StreamTypeIndex", StreamTypeIndex);
-                SendEvent("onGotStreamsDescription", param);
             }
-            catch (Exception e)
-            {
-                Logger.Error(e);
-            }
+            
+            promise.Resolve(default);
+            Logger.LogExit();
         }
-        [ReactMethod]
-        public void SetStream(int SelectedIndex, int StreamTypeIndex)
-        {
-            if (this.allStreamsDescriptions[StreamTypeIndex] == null) return;
 
-            if (SelectedIndex != -1)
-            {
-                var index = (JuvoPlayer.Common.StreamType)StreamTypeIndex;
-                if (index == JuvoPlayer.Common.StreamType.Subtitle)
-                {
-                    if (SelectedIndex == 0)
-                    {
-                        Player.DeactivateStream(StreamType.Subtitle);
-                        return;
-                    }
-                }
-                var stream = (StreamDescription)this.allStreamsDescriptions[StreamTypeIndex][SelectedIndex];
-                Player.ChangeActiveStream(stream).Wait();
-            }
-        }
         [ReactMethod]
         public void Log(string message)
         {
             Logger?.Info(message);
         }
-        [ReactMethod]
-        public void StartPlayback(string videoURI, string drmDatasJSON, string streamingProtocol)
-        {
-            Logger.Info("");
 
-            try
+        [ReactMethod]
+        public async void SetSource(string videoURI, string drmDatasJSON, string streamingProtocol, IPromise promise)
+        {
+            Logger.LogEnter(videoURI);
+            
+            if (videoURI == null)
             {
-                var drmDataList = (drmDatasJSON != null) ? JSONFileReader.DeserializeJsonText<List<DrmDescription>>(drmDatasJSON) : new List<DrmDescription>();
-                Play(videoURI, drmDataList, streamingProtocol);
+                Logger.Error("No stream");
+                promise.Resolve(default);
+                return;
             }
-            catch (Exception e)
+
+            if (Player.State == PlayerState.Playing)
             {
-                Logger?.Error(Tag, "StartPlayback failed... " + e.Message);
+                Logger.Warn("Already in playing state");
+                promise.Resolve(default);
+                return;
             }
-            finally
+
+            var drmDataList = (drmDatasJSON != null) ? JSONFileReader.DeserializeJsonText<List<DrmDescription>>(drmDatasJSON) : new List<DrmDescription>();
+
+            await Player.SetSource(new ClipDefinition
             {
-                seekLogic.Reset();
-            }
+                Type = streamingProtocol,
+                Url = videoURI,
+                Subtitles = new List<SubtitleInfo>(),
+                DRMDatas = drmDataList
+            }).ConfigureAwait(false);
+       
+            seekLogic.Reset();
+            promise.Resolve(default);
+
+            Logger.LogExit();
         }
+
+        [ReactMethod]
+        public void InitialisePlayerService()
+        {
+            Logger.LogEnter();
+
+            Player = new PlayerService.PlayerService();
+            Player.SetWindow(window);
+            
+            playerStateChangeSub = Player.StateChanged().Subscribe(OnPlayerStateChanged, OnPlaybackCompleted);
+            
+            playbackErrorsSub = Player.PlaybackError()
+                .Subscribe(message =>
+                {
+                    var param = new JObject();
+                    param.Add("Message", message);
+                    SendEvent("onPlaybackError", param);
+                });
+            
+            bufferingProgressSub = Player.BufferingProgress().Subscribe(UpdateBufferingProgress);
+
+            Logger.LogExit();
+        }
+
         [ReactMethod]
         public void StopPlayback()
         {
@@ -328,21 +370,36 @@ namespace JuvoReactNative
 
             OnDestroy();
         }
-        [ReactMethod]
-        public void PauseResumePlayback()
-        {
-            if (Player == null)
-                return;
 
-            switch (Player.State)
+        [ReactMethod]
+        public async void PauseResumePlayback(IPromise promise)
+        {
+            Logger.LogEnter();
+
+            if (Player != null)
             {
-                case JuvoPlayer.Common.PlayerState.Playing:
-                    Player.Pause().Wait();
-                    break;
-                case JuvoPlayer.Common.PlayerState.Paused:
-                    Player.Start().Wait();
-                    break;
+                Logger.Info($"Player state: {Player.State}");
+                
+                Task pauseResumeTask;
+                switch (Player.State)
+                {
+                    case JuvoPlayer.Common.PlayerState.Playing:
+                        pauseResumeTask = Player.Pause();
+                        break;
+
+                    case JuvoPlayer.Common.PlayerState.Paused:
+                        pauseResumeTask = Player.Start();
+                        break;
+
+                    default:
+                        pauseResumeTask = Task.CompletedTask;
+                        break;
+                }
+
+                await pauseResumeTask.ConfigureAwait(false);
             }
+
+            Logger.LogExit();
         }
         [ReactMethod]
         public void Forward()

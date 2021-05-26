@@ -55,7 +55,6 @@ export default class PlaybackView extends React.Component {
     this.resetPlaybackTime = this.resetPlaybackTime.bind(this);
     this.onSeekCompleted = this.onSeekCompleted.bind(this);
     this.onPlaybackError = this.onPlaybackError.bind(this);
-    this.launchThePlayback = this.launchThePlayback.bind(this);
     this.handleFastForwardKey = this.handleFastForwardKey.bind(this);
     this.handleRewindKey = this.handleRewindKey.bind(this);
     this.getFormattedTime = this.getFormattedTime.bind(this);
@@ -74,6 +73,12 @@ export default class PlaybackView extends React.Component {
     this.infoHideWasRequested = this.infoHideWasRequested.bind(this);
     this.clearInfoHideCallabckID = this.clearInfoHideCallabckID.bind(this);
     this.clearSubtitleTextCallbackID = this.clearSubtitleTextCallbackID.bind(this);
+
+    this.startPlaybackAsync = this.startPlaybackAsync.bind(this);
+    this.getStreamsDescriptionAsync = this.getStreamsDescriptionAsync.bind(this);
+    this.initialisePlayerService = this.initialisePlayerService.bind(this);
+    this.setSourceAsync = this.setSourceAsync.bind(this);
+    this.pauseResumeAsync = this.pauseResumeAsync.bind(this);
   }
   componentWillMount() {
     DeviceEventEmitter.addListener('PlaybackView/onTVKeyDown', this.onTVKeyDown);
@@ -83,8 +88,7 @@ export default class PlaybackView extends React.Component {
     this.JuvoEventEmitter.addListener('onUpdatePlayTime', this.onUpdatePlayTime);
     this.JuvoEventEmitter.addListener('onSeekCompleted', this.onSeekCompleted);
     this.JuvoEventEmitter.addListener('onPlaybackError', this.onPlaybackError);
-    this.JuvoEventEmitter.addListener('onGotStreamsDescription', this.onGotStreamsDescription);
-    this.launchThePlayback();
+    this.initialisePlayerService();
   }
 
   componentWillUnmount() {
@@ -95,7 +99,6 @@ export default class PlaybackView extends React.Component {
     this.JuvoEventEmitter.removeListener('onUpdatePlayTime', this.onUpdatePlayTime);
     this.JuvoEventEmitter.removeListener('onSeekCompleted', this.onSeekCompleted);
     this.JuvoEventEmitter.removeListener('onPlaybackError', this.onPlaybackError);
-    this.JuvoEventEmitter.removeListener('onGotStreamsDescription', this.onGotStreamsDescription);
     this.clearSubtitleTextCallbackID();
     this.resetPlaybackStatus();
   }
@@ -157,29 +160,50 @@ export default class PlaybackView extends React.Component {
     this.toggleView();
   }
 
-  launchThePlayback() {
-    this.JuvoPlayer.Log('launchThePlayback()');
+  initialisePlayerService() {
+    this.JuvoPlayer.Log('initialisePlayerService()');
+    this.JuvoPlayer.InitialisePlayerService();
+  }
+
+  async setSourceAsync() {
+    this.JuvoPlayer.Log('setSourceAsync()');
     const video = ResourceLoader.clipsData[this.state.selectedIndex];
     let DRM = video.drmDatas ? JSON.stringify(video.drmDatas) : null;
-    this.JuvoPlayer.StartPlayback(video.url, DRM, video.type);
-    this.playbackStarted = true;
-    this.operationInProgress = true;
+    await this.JuvoPlayer.SetSource(video.url, DRM, video.type);
   }
 
   onPlaybackCompleted(param) {
     this.toggleView();
   }
   onPlayerStateChanged(player) {
-    if (player.State === 'Playing') {
-      this.operationInProgress = false;
-      this.requestInfoShow();
-    }
-    if (player.State === 'Idle') {
-      this.resetPlaybackTime();
-      this.redraw();
-    }
+
     this.playerState = player.State;
+    this.JuvoPlayer.Log('onPlayerStateChanged( '+this.playerState+' )');
+    
+    switch(this.playerState)
+    {
+      case "None":
+        this.operationInProgress = true;
+        this.setSourceAsync();
+        break;
+
+      case "Ready":
+        this.startPlaybackAsync();
+        break;
+
+      case "Playing":
+        this.playbackStarted = true;
+        this.operationInProgress = false;
+        this.requestInfoShow();
+        break;
+
+      case "Idle":
+        this.resetPlaybackTime();
+        this.redraw();
+        break;
+    }
   }
+  
   onUpdateBufferingProgress(buffering) {
     if (buffering.Percent == 100) {
       this.inProgressDescription = 'Please wait...';
@@ -209,54 +233,93 @@ export default class PlaybackView extends React.Component {
     this.requestInfoHide();
     this.redraw();
   }
+
+  async startPlaybackAsync() {
+    this.JuvoPlayer.Log('startPlaybackAsync()');
+    await this.JuvoPlayer.PlayerStart();
+  }
+
+  async getStreamsDescriptionAsync() {
+    var getStreams = !this.infoHideWasRequested();
+    this.JuvoPlayer.Log('getStreamsDescriptionAsync(): '+getStreams);
+    //Show the settings view only if the playback controls are visible on the screen
+    if (getStreams) {
+      //requesting the native module for details regarding the stream settings.
+      //The response is handled inside the onGotStreamsDescription() function.
+      
+      Promise.all([
+          this.JuvoPlayer.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Audio),
+          this.JuvoPlayer.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Video),
+          this.JuvoPlayer.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Subtitle)
+        ]).then((streams) =>
+      {
+        this.JuvoPlayer.Log('getStreamsDescriptionAsync(): got all streams');
+        streams.forEach(stream => this.onGotStreamsDescription(stream));
+      });
+    }
+  }
+
+  async pauseResumeAsync() {
+    this.JuvoPlayer.Log('pauseResumeAsync( '+this.playerState+' )');
+
+    if (this.playerState === 'Paused' || this.playerState === 'Playing') {
+      //pause - resume
+      var pPauseResume = this.JuvoPlayer.PauseResumePlayback();
+      this.requestInfoShow();
+      await pPauseResume;
+    }
+  }
+
   onTVKeyDown(pressed) {
     //There are two parameters available:
     //params.KeyName
     //params.KeyCode
     DeviceEventEmitter.emit('PlaybackSettingsView/onTVKeyDown',pressed);
+    this.JuvoPlayer.Log('onTVKeyDown( '+pressed.KeyName+' ) key listen: '+this.keysListenningOff);
+
     if (this.keysListenningOff) return;
     switch (pressed.KeyName) {
       case 'Right':
         this.handleFastForwardKey();
         break;
+
       case 'Left':
         this.handleRewindKey();
         break;
+
       case 'Return':
       case 'XF86AudioPlay':
       case 'XF86PlayBack':
-        if (this.playerState === 'Paused' || this.playerState === 'Playing') {
-          //pause - resume
-          this.JuvoPlayer.PauseResumePlayback();
-          this.requestInfoShow();
-        }
+        this.pauseResumeAsync();
         break;
+
       case 'XF86Back':
       case 'XF86AudioStop':
         if (this.infoHideWasRequested()) {
-          this.JuvoPlayer.Log('onTVKeyDown: '+pressed.KeyName+". toggleView()");
+          this.JuvoPlayer.Log('onTVKeyDown: '+pressed.KeyName+'. toggleView()');
           this.toggleView();
         } else {
-          this.JuvoPlayer.Log('onTVKeyDown: '+pressed.KeyName+". requestInfoHide()->redraw()");
+          this.JuvoPlayer.Log('onTVKeyDown: '+pressed.KeyName+'. requestInfoHide()->redraw()');
           this.requestInfoHide();
           this.redraw();
         }
         break;
+
       case 'Up':
-        //Show the settings view only if the playback controls are visible on the screen
-        if (!this.infoHideWasRequested()) {
-          //requesting the native module for details regarding the stream settings.
-          //The response is handled inside the onGotStreamsDescription() function.
-          this.JuvoPlayer.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Audio);
-          this.JuvoPlayer.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Video);
-          this.JuvoPlayer.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Subtitle);
-        }
+        this.getStreamsDescriptionAsync();
+        // fall through intentional
       default:
         this.requestInfoShow();
     }
   }
   onGotStreamsDescription(streams) {
-    this.JuvoPlayer.Log('onGotStreamsDescription: '+streams.StreamTypeIndex);
+    if(streams == null || streams === undefined)
+    {
+      this.JuvoPlayer.Log('onGotStreamsDescription( null/undefined stream! )');
+      return;
+    }
+
+    this.JuvoPlayer.Log('onGotStreamsDescription( '+streams.StreamTypeIndex+' )');
     var StreamType = Native.JuvoPlayer.Common.StreamType;
     switch (streams.StreamTypeIndex) {
       case StreamType.Audio:
