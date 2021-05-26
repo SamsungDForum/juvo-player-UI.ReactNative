@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Reactive;
 using System.Threading.Tasks;
 using ElmSharp;
 using JuvoPlayer.Common;
@@ -44,6 +45,7 @@ namespace UI.Common
         IObservable<PlayerState> StateChanged();
         IObservable<string> PlaybackError();
         IObservable<int> BufferingProgress();
+        IObservable<Unit> EndOfStream();
         void SetWindow(Window window);
     }
 }

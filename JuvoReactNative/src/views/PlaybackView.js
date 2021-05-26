@@ -79,7 +79,10 @@ export default class PlaybackView extends React.Component {
     this.initialisePlayerService = this.initialisePlayerService.bind(this);
     this.setSourceAsync = this.setSourceAsync.bind(this);
     this.pauseResumeAsync = this.pauseResumeAsync.bind(this);
+    this.onEndOfStream = this.onEndOfStream.bind(this);
+    this.showInfoNoUpdateNoHide = this.showInfoNoUpdateNoHide.bind(this);
   }
+
   componentWillMount() {
     DeviceEventEmitter.addListener('PlaybackView/onTVKeyDown', this.onTVKeyDown);
     this.JuvoEventEmitter.addListener('onPlaybackCompleted', this.onPlaybackCompleted);
@@ -88,6 +91,8 @@ export default class PlaybackView extends React.Component {
     this.JuvoEventEmitter.addListener('onUpdatePlayTime', this.onUpdatePlayTime);
     this.JuvoEventEmitter.addListener('onSeekCompleted', this.onSeekCompleted);
     this.JuvoEventEmitter.addListener('onPlaybackError', this.onPlaybackError);
+    this.JuvoEventEmitter.addListener('onEndOfStream', this.onEndOfStream);
+
     this.initialisePlayerService();
   }
 
@@ -99,6 +104,8 @@ export default class PlaybackView extends React.Component {
     this.JuvoEventEmitter.removeListener('onUpdatePlayTime', this.onUpdatePlayTime);
     this.JuvoEventEmitter.removeListener('onSeekCompleted', this.onSeekCompleted);
     this.JuvoEventEmitter.removeListener('onPlaybackError', this.onPlaybackError);
+    this.JuvoEventEmitter.removeListener('onEndOfStream', this.onEndOfStream);
+    
     this.clearSubtitleTextCallbackID();
     this.resetPlaybackStatus();
   }
@@ -234,6 +241,11 @@ export default class PlaybackView extends React.Component {
     this.redraw();
   }
 
+  onEndOfStream(_) {
+    this.JuvoPlayer.Log('onEndOfStream()');
+    this.showInfoNoUpdateNoHide();
+  }
+
   async startPlaybackAsync() {
     this.JuvoPlayer.Log('startPlaybackAsync()');
     await this.JuvoPlayer.PlayerStart();
@@ -356,11 +368,23 @@ export default class PlaybackView extends React.Component {
     this.playbackTimeCurrent = 0;
     this.playbackTimeTotal = 0;
   }
+
+  showInfoNoUpdateNoHide() {
+    this.clearInfoRedrawCallabckID();
+    this.clearInfoHideCallabckID();
+    this.infoRedrawCallbackID = 0;
+    this.infoHideCallbackID = 0;
+    this.redraw();
+    this.infoRedrawCallbackID = -1;
+    this.infoHideCallbackID = -1;
+  }
+
   requestInfoShow() {
     this.clearInfoRedrawCallabckID();
     this.clearInfoHideCallabckID();
     this.scheduleTheHideAndRedrawCallbacks();
   }
+
   requestInfoHide() {
     this.clearInfoRedrawCallabckID()
     this.clearInfoHideCallabckID();

@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Reactive;
 using System.Threading;
 using System.Threading.Tasks;
 using ReactNative;
@@ -53,6 +54,7 @@ namespace JuvoReactNative
         private IDisposable playbackErrorsSub;
         private IDisposable bufferingProgressSub;
         private IDisposable deepLinkSub;
+        private IDisposable eosSub;
         private IDeepLinkSender deepLinkSender;
         private readonly SynchronizationContext mainSynchronizationContext;
 
@@ -152,12 +154,17 @@ namespace JuvoReactNative
             param.Add("State", "Completed");
             SendEvent("onPlaybackCompleted", param);
         }
+
         private void DisposePlayerSubscribers()
         {
-            Logger.Info("");
+            Logger.LogEnter();
+
             playerStateChangeSub?.Dispose();
             playbackErrorsSub?.Dispose();
             bufferingProgressSub?.Dispose();
+            eosSub?.Dispose();
+
+            Logger.LogExit();
         }
         public void OnDestroy()
         {
@@ -178,7 +185,7 @@ namespace JuvoReactNative
 
             if (havePlayer)
                 WaitHandle.WaitAll(new[] { ((IAsyncResult)Player.Resume()).AsyncWaitHandle });
-            
+
             Logger.LogExit();
         }
 
@@ -213,7 +220,7 @@ namespace JuvoReactNative
             param.Add("SubtiteText", txt);
             SendEvent("onUpdatePlayTime", param);
         }
-       
+
         public void OnError(Exception error)
         {
             var param = new JObject();
@@ -229,15 +236,15 @@ namespace JuvoReactNative
 
             await Player.Start().ConfigureAwait(false);
             promise.Resolve(default);
-            
+
             Logger.LogExit();
         }
-        
+
         [ReactMethod]
         public async void GetStreamsDescription(int StreamTypeIndex, IPromise promise)
         {
             JuvoPlayer.Common.StreamType streamType;
-            
+
             Logger.LogEnter($"{streamType = (JuvoPlayer.Common.StreamType)StreamTypeIndex}");
 
             if (streamType == JuvoPlayer.Common.StreamType.Subtitle)
@@ -258,7 +265,7 @@ namespace JuvoReactNative
             }
             else
             {
-                this.allStreamsDescriptions[StreamTypeIndex] = 
+                this.allStreamsDescriptions[StreamTypeIndex] =
                     await Player.GetStreamsDescription(streamType).ConfigureAwait(false);
             }
 
@@ -266,7 +273,7 @@ namespace JuvoReactNative
             param.Add("Description", Newtonsoft.Json.JsonConvert.SerializeObject(this.allStreamsDescriptions[StreamTypeIndex]));
             param.Add("StreamTypeIndex", StreamTypeIndex);
             promise.Resolve(param);
-            
+
             Logger.LogExit($"{streamType}");
         }
 
@@ -275,13 +282,13 @@ namespace JuvoReactNative
         {
             JuvoPlayer.Common.StreamType streamType;
             bool haveStreamData = this.allStreamsDescriptions[StreamTypeIndex] != null && SelectedIndex != -1;
-            
+
             Logger.LogEnter($"{streamType = (JuvoPlayer.Common.StreamType)StreamTypeIndex} Have data: {haveStreamData}");
 
             if (haveStreamData)
             {
                 if (streamType == JuvoPlayer.Common.StreamType.Subtitle && SelectedIndex == 0)
-                { 
+                {
                     Player.DeactivateStream(StreamType.Subtitle);
                 }
                 else
@@ -291,7 +298,7 @@ namespace JuvoReactNative
                         .ConfigureAwait(false);
                 }
             }
-            
+
             promise.Resolve(default);
             Logger.LogExit();
         }
@@ -306,7 +313,7 @@ namespace JuvoReactNative
         public async void SetSource(string videoURI, string drmDatasJSON, string streamingProtocol, IPromise promise)
         {
             Logger.LogEnter(videoURI);
-            
+
             if (videoURI == null)
             {
                 Logger.Error("No stream");
@@ -330,7 +337,7 @@ namespace JuvoReactNative
                 Subtitles = new List<SubtitleInfo>(),
                 DRMDatas = drmDataList
             }).ConfigureAwait(false);
-       
+
             seekLogic.Reset();
             promise.Resolve(default);
 
@@ -344,9 +351,9 @@ namespace JuvoReactNative
 
             Player = new PlayerService.PlayerService();
             Player.SetWindow(window);
-            
+
             playerStateChangeSub = Player.StateChanged().Subscribe(OnPlayerStateChanged, OnPlaybackCompleted);
-            
+
             playbackErrorsSub = Player.PlaybackError()
                 .Subscribe(message =>
                 {
@@ -354,8 +361,10 @@ namespace JuvoReactNative
                     param.Add("Message", message);
                     SendEvent("onPlaybackError", param);
                 });
-            
+
             bufferingProgressSub = Player.BufferingProgress().Subscribe(UpdateBufferingProgress);
+
+            eosSub = Player.EndOfStream().Subscribe(_ => SendEvent("onEndOfStream", new JObject()));
 
             Logger.LogExit();
         }
@@ -379,7 +388,7 @@ namespace JuvoReactNative
             if (Player != null)
             {
                 Logger.Info($"Player state: {Player.State}");
-                
+
                 Task pauseResumeTask;
                 switch (Player.State)
                 {

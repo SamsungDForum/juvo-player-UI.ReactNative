@@ -18,6 +18,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reactive;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Nito.AsyncEx;
@@ -39,6 +40,7 @@ namespace PlayerService
         private readonly BehaviorSubject<PlayerState> _playerStateSubject = new BehaviorSubject<PlayerState>(PlayerState.None);
         private readonly Subject<string> _errorSubject = new Subject<string>();
         private readonly Subject<int> _bufferingSubject = new Subject<int>();
+        private readonly Subject<Unit> _endOfStream = new Subject<Unit>();
         private IDisposable _playerEventSubscription;
 
         private ClipDefinition _currentClip;
@@ -110,7 +112,7 @@ namespace PlayerService
             switch (ev)
             {
                 case EosEvent _:
-                    Logger.Info("EOS observed");
+                    _endOfStream.OnNext(Unit.Default);
                     break;
 
                 case BufferingEvent buf:
@@ -361,6 +363,7 @@ namespace PlayerService
         public IObservable<PlayerState> StateChanged() => _playerStateSubject.Publish().RefCount();
         public IObservable<string> PlaybackError() => _errorSubject.Publish().RefCount();
         public IObservable<int> BufferingProgress() => _bufferingSubject.Publish().RefCount();
+        public IObservable<Unit> EndOfStream() => _endOfStream.Publish().RefCount();
         public void SetWindow(Window window) => _window = window;
     }
 }
