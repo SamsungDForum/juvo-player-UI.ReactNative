@@ -51,7 +51,7 @@ export default class ContentPicture extends React.Component {
       );
     } else {
       return (
-        <HideableView position={this.props.position} visible={visible} duration={this.props.fadeDuration}>
+        <HideableView position={this.props.position} visible={visible} duration={fadeDuration}>
           <View style={stylesThumb}>
             <Image
               resizeMode='cover'
@@ -62,8 +62,8 @@ export default class ContentPicture extends React.Component {
                 left: left
               }}
               source={source}
-              onLoadStart={this.props.onLoadStart}
-              onLoadEnd={this.props.onLoadEnd}
+              onLoadStart={onLoadStart}
+              onLoadEnd={onLoadEnd}
               onError={error => {
                 this.JuvoPlayer.Log('Image loading error: ' + error);
               }}

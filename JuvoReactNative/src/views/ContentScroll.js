@@ -19,7 +19,6 @@ export default class ContentScroll extends React.Component {
     this.scrolloffset = 0;
     this.itemWidth = 454;
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
-    this.onTVKeyUp = this.onTVKeyUp.bind(this);
     this.handleButtonPressRight = this.handleButtonPressRight.bind(this);
     this.handleButtonPressLeft = this.handleButtonPressLeft.bind(this);
     this.JuvoPlayer = NativeModules.JuvoPlayer;
@@ -45,12 +44,10 @@ export default class ContentScroll extends React.Component {
 
   componentWillMount() {
     DeviceEventEmitter.addListener('ContentScroll/onTVKeyDown', this.onTVKeyDown);
-    DeviceEventEmitter.addListener('ContentScroll/onTVKeyUp', this.onTVKeyUp);
   }
   
   componentWillUnmount() {
     DeviceEventEmitter.removeListener('ContentScroll/onTVKeyDown', this.onTVKeyDown);
-    DeviceEventEmitter.removeListener('ContentScroll/onTVKeyUp', this.onTVKeyUp);
   }
 
   componentWillReceiveProps(nextProps) {
@@ -64,6 +61,9 @@ export default class ContentScroll extends React.Component {
   }
 
   onTVKeyDown(pressed) {
+
+    this.JuvoPlayer.Log('ContentScroll.onTVKeyDown(): '+pressed.KeyName+' ignore keys: '+this.props.keysListenningOff);
+
     //There are two parameters available:
     //params.KeyName
     //params.KeyCode
@@ -76,14 +76,14 @@ export default class ContentScroll extends React.Component {
       case 'Left':
         this.handleButtonPressLeft();
         break;
+      default:
+          return;
     }
-  }
 
-  onTVKeyUp(pressed) {
-    if (this.props.keysListenningOff) return;
+    const indexChanged = this.props.onSelectedIndexChange ? this.props.onSelectedIndexChange : (e)=>{};
+    indexChanged(this.curIndex);
 
-    this.props.onSelectedIndexChange(this.curIndex);
-    this.setState({ selectedIndex: this.curIndex });
+    this.JuvoPlayer.Log('ContentScroll.onTVKeyDown(): Exit');
   }
 
   shouldComponentUpdate(nextProps, nextState) {
