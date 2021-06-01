@@ -81,6 +81,7 @@ export default class PlaybackView extends React.Component {
     this.pauseResumeAsync = this.pauseResumeAsync.bind(this);
     this.onEndOfStream = this.onEndOfStream.bind(this);
     this.showInfoNoUpdateNoHide = this.showInfoNoUpdateNoHide.bind(this);
+    this.initialiseAndStart = this.initialiseAndStart.bind(this);
   }
 
   componentWillMount() {
@@ -92,8 +93,11 @@ export default class PlaybackView extends React.Component {
     this.JuvoEventEmitter.addListener('onSeekCompleted', this.onSeekCompleted);
     this.JuvoEventEmitter.addListener('onPlaybackError', this.onPlaybackError);
     this.JuvoEventEmitter.addListener('onEndOfStream', this.onEndOfStream);
+  }
 
-    this.initialisePlayerService();
+  async componentDidMount()
+  {
+    await this.initialiseAndStart();
   }
 
   componentWillUnmount() {
@@ -172,6 +176,22 @@ export default class PlaybackView extends React.Component {
     this.JuvoPlayer.InitialisePlayerService();
   }
 
+  async initialiseAndStart()
+  {
+    this.JuvoPlayer.Log('initialiseAndStart()');
+    this.operationInProgress = true;
+    const video = ResourceLoader.clipsData[this.state.selectedIndex];
+    let DRM = video.drmDatas ? JSON.stringify(video.drmDatas) : null;
+    await this.JuvoPlayer.InitialiseAndStart(video.url, DRM, video.type);
+
+    if(this.playerState == 'Playing')
+    {
+        this.playbackStarted = true;
+        this.operationInProgress = false;
+        this.requestInfoShow();
+    }
+  }
+
   async setSourceAsync() {
     this.JuvoPlayer.Log('setSourceAsync()');
     const video = ResourceLoader.clipsData[this.state.selectedIndex];
@@ -182,6 +202,7 @@ export default class PlaybackView extends React.Component {
   onPlaybackCompleted(param) {
     this.toggleView();
   }
+
   onPlayerStateChanged(player) {
 
     this.playerState = player.State;
@@ -189,21 +210,6 @@ export default class PlaybackView extends React.Component {
     
     switch(this.playerState)
     {
-      case "None":
-        this.operationInProgress = true;
-        this.setSourceAsync();
-        break;
-
-      case "Ready":
-        this.startPlaybackAsync();
-        break;
-
-      case "Playing":
-        this.playbackStarted = true;
-        this.operationInProgress = false;
-        this.requestInfoShow();
-        break;
-
       case "Idle":
         this.resetPlaybackTime();
         this.redraw();

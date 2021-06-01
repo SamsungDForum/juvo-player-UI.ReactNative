@@ -310,6 +310,59 @@ namespace JuvoReactNative
         }
 
         [ReactMethod]
+        public async void InitialiseAndStart(string videoURI, string drmDatasJSON, string streamingProtocol, IPromise promise)
+        {
+            Logger.LogEnter();
+
+            if (videoURI == null)
+            {
+                Logger.Error("No stream");
+                promise.Resolve(default);
+                return;
+            }
+
+            Player = new PlayerService.PlayerService();
+            Player.SetWindow(window);
+
+            playerStateChangeSub = Player.StateChanged().Subscribe(OnPlayerStateChanged, OnPlaybackCompleted);
+
+            playbackErrorsSub = Player.PlaybackError()
+                .Subscribe(message =>
+                {
+                    var param = new JObject();
+                    param.Add("Message", message);
+                    SendEvent("onPlaybackError", param);
+                });
+
+            bufferingProgressSub = Player.BufferingProgress().Subscribe(UpdateBufferingProgress);
+
+            eosSub = Player.EndOfStream().Subscribe(_ => SendEvent("onEndOfStream", new JObject()));
+
+            var drmDataList = (drmDatasJSON != null) ? JSONFileReader.DeserializeJsonText<List<DrmDescription>>(drmDatasJSON) : new List<DrmDescription>();
+
+            await Player.SetSource(new ClipDefinition
+            {
+                Type = streamingProtocol,
+                Url = videoURI,
+                Subtitles = new List<SubtitleInfo>(),
+                DRMDatas = drmDataList
+            });
+
+            Logger.Info($"Source set. Player state: {Player.State}");
+
+            if (Player.State == PlayerState.Ready)
+            {
+                seekLogic.Reset();
+
+                await Player.Start();
+            }
+
+            promise.Resolve(default);
+
+            Logger.LogExit();
+        }
+
+        [ReactMethod]
         public async void SetSource(string videoURI, string drmDatasJSON, string streamingProtocol, IPromise promise)
         {
             Logger.LogEnter(videoURI);
