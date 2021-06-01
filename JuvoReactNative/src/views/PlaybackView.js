@@ -243,7 +243,7 @@ export default class PlaybackView extends React.Component {
 
   onEndOfStream(_) {
     this.JuvoPlayer.Log('onEndOfStream()');
-    this.showInfoNoUpdateNoHide();
+    this.toggleView();
   }
 
   async startPlaybackAsync() {
