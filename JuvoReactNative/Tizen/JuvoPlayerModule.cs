@@ -65,16 +65,7 @@ namespace JuvoReactNative
             seekLogic = new SeekLogic(this);
             this.deepLinkSender = deepLinkSender;
             this.mainSynchronizationContext = mainSynchronizationContext;
-            seekCompletedSub = seekLogic.SeekCompleted().Subscribe(message =>
-            {
-                var param = new JObject();
-                SendEvent("onSeekCompleted", param);
-            });
 
-            playbackTimer = new Timer(
-                            callback: new TimerCallback(UpdatePlayTime),
-                            state: seekLogic.CurrentPositionUI,
-                            Timeout.Infinite, Timeout.Infinite);
         }
 
         private void OnDeepLinkReceived(string url)
@@ -166,6 +157,7 @@ namespace JuvoReactNative
 
             Logger.LogExit();
         }
+
         public void OnDestroy()
         {
             Logger?.Info("Destroying JuvoPlayerModule...");
@@ -312,49 +304,69 @@ namespace JuvoReactNative
         [ReactMethod]
         public async void InitialiseAndStart(string videoURI, string drmDatasJSON, string streamingProtocol, IPromise promise)
         {
-            Logger.LogEnter();
-
-            if (videoURI == null)
+            async Task InitialiseAndStartInternal(string uri, List<DrmDescription> drm, string protocol)
             {
-                Logger.Error("No stream");
-                promise.Resolve(default);
-                return;
-            }
-
-            Player = new PlayerService.PlayerService();
-            Player.SetWindow(window);
-
-            playerStateChangeSub = Player.StateChanged().Subscribe(OnPlayerStateChanged, OnPlaybackCompleted);
-
-            playbackErrorsSub = Player.PlaybackError()
-                .Subscribe(message =>
+                seekCompletedSub = seekLogic.SeekCompleted().Subscribe(message =>
                 {
                     var param = new JObject();
-                    param.Add("Message", message);
-                    SendEvent("onPlaybackError", param);
+                    SendEvent("onSeekCompleted", param);
                 });
 
-            bufferingProgressSub = Player.BufferingProgress().Subscribe(UpdateBufferingProgress);
+                playbackTimer = new Timer(
+                    callback: new TimerCallback(UpdatePlayTime),
+                    state: seekLogic.CurrentPositionUI,
+                    Timeout.Infinite, Timeout.Infinite);
 
-            eosSub = Player.EndOfStream().Subscribe(_ => SendEvent("onEndOfStream", new JObject()));
+                Player = new PlayerService.PlayerService();
+                Player.SetWindow(window);
 
-            var drmDataList = (drmDatasJSON != null) ? JSONFileReader.DeserializeJsonText<List<DrmDescription>>(drmDatasJSON) : new List<DrmDescription>();
+                playerStateChangeSub = Player.StateChanged().Subscribe(OnPlayerStateChanged, OnPlaybackCompleted);
 
-            await Player.SetSource(new ClipDefinition
+                playbackErrorsSub = Player.PlaybackError()
+                    .Subscribe(message =>
+                    {
+                        var param = new JObject();
+                        param.Add("Message", message);
+                        SendEvent("onPlaybackError", param);
+                    });
+
+                bufferingProgressSub = Player.BufferingProgress().Subscribe(UpdateBufferingProgress);
+
+                eosSub = Player.EndOfStream().Subscribe(_ => SendEvent("onEndOfStream", new JObject()));
+
+                await Player.SetSource(new ClipDefinition
+                {
+                    Type = protocol,
+                    Url = uri,
+                    Subtitles = new List<SubtitleInfo>(),
+                    DRMDatas = drm
+                });
+
+                Logger.Info($"Source set. Player state: {Player.State}");
+
+                if (Player.State == PlayerState.Ready)
+                {
+                    seekLogic.Reset();
+
+                    await Player.Start();
+                }
+            }
+
+            Logger.LogEnter();
+
+            if (videoURI != null)
             {
-                Type = streamingProtocol,
-                Url = videoURI,
-                Subtitles = new List<SubtitleInfo>(),
-                DRMDatas = drmDataList
-            });
-
-            Logger.Info($"Source set. Player state: {Player.State}");
-
-            if (Player.State == PlayerState.Ready)
+                await InitialiseAndStartInternal(
+                        videoURI,
+                        (drmDatasJSON != null)
+                            ? JSONFileReader.DeserializeJsonText<List<DrmDescription>>(drmDatasJSON)
+                            : new List<DrmDescription>(),
+                        streamingProtocol)
+                    .ConfigureAwait(false);
+            }
+            else
             {
-                seekLogic.Reset();
-
-                await Player.Start();
+                Logger.Error("No stream");
             }
 
             promise.Resolve(default);
