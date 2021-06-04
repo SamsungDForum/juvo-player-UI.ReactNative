@@ -74,14 +74,10 @@ export default class PlaybackView extends React.Component {
     this.clearInfoHideCallabckID = this.clearInfoHideCallabckID.bind(this);
     this.clearSubtitleTextCallbackID = this.clearSubtitleTextCallbackID.bind(this);
 
-    this.startPlaybackAsync = this.startPlaybackAsync.bind(this);
     this.getStreamsDescriptionAsync = this.getStreamsDescriptionAsync.bind(this);
-    this.initialisePlayerService = this.initialisePlayerService.bind(this);
-    this.setSourceAsync = this.setSourceAsync.bind(this);
     this.pauseResumeAsync = this.pauseResumeAsync.bind(this);
     this.onEndOfStream = this.onEndOfStream.bind(this);
-    this.showInfoNoUpdateNoHide = this.showInfoNoUpdateNoHide.bind(this);
-    this.initialiseAndStart = this.initialiseAndStart.bind(this);
+    this.startPlayback = this.startPlayback.bind(this);
   }
 
   componentWillMount() {
@@ -95,9 +91,9 @@ export default class PlaybackView extends React.Component {
     this.JuvoEventEmitter.addListener('onEndOfStream', this.onEndOfStream);
   }
 
-  async componentDidMount()
+  componentDidMount()
   {
-    await this.initialiseAndStart();
+    this.JuvoPlayer.InitialisePlayback();
   }
 
   componentWillUnmount() {
@@ -171,32 +167,13 @@ export default class PlaybackView extends React.Component {
     this.toggleView();
   }
 
-  initialisePlayerService() {
-    this.JuvoPlayer.Log('initialisePlayerService()');
-    this.JuvoPlayer.InitialisePlayerService();
-  }
-
-  async initialiseAndStart()
+  async startPlayback()
   {
-    this.JuvoPlayer.Log('initialiseAndStart()');
+    this.JuvoPlayer.Log('startPlayback()');
     this.operationInProgress = true;
     const video = ResourceLoader.clipsData[this.state.selectedIndex];
     let DRM = video.drmDatas ? JSON.stringify(video.drmDatas) : null;
-    await this.JuvoPlayer.InitialiseAndStart(video.url, DRM, video.type);
-
-    if(this.playerState == 'Playing')
-    {
-        this.playbackStarted = true;
-        this.operationInProgress = false;
-        this.requestInfoShow();
-    }
-  }
-
-  async setSourceAsync() {
-    this.JuvoPlayer.Log('setSourceAsync()');
-    const video = ResourceLoader.clipsData[this.state.selectedIndex];
-    let DRM = video.drmDatas ? JSON.stringify(video.drmDatas) : null;
-    await this.JuvoPlayer.SetSource(video.url, DRM, video.type);
+    await this.JuvoPlayer.StartPlayback(video.url, DRM, video.type);
   }
 
   onPlaybackCompleted(param) {
@@ -210,8 +187,17 @@ export default class PlaybackView extends React.Component {
     
     switch(this.playerState)
     {
-      case "Idle":
+      case 'None':
+        this.operationInProgress = true;
         this.resetPlaybackTime();
+        this.requestInfoShow();
+        this.redraw();
+        this.startPlayback();
+        break;
+
+      case 'Playing':
+        this.playbackStarted = true;
+        this.operationInProgress = false;
         this.redraw();
         break;
     }
@@ -250,11 +236,6 @@ export default class PlaybackView extends React.Component {
   onEndOfStream(_) {
     this.JuvoPlayer.Log('onEndOfStream()');
     this.toggleView();
-  }
-
-  async startPlaybackAsync() {
-    this.JuvoPlayer.Log('startPlaybackAsync()');
-    await this.JuvoPlayer.PlayerStart();
   }
 
   async getStreamsDescriptionAsync() {
@@ -375,16 +356,6 @@ export default class PlaybackView extends React.Component {
     this.playbackTimeTotal = 0;
   }
 
-  showInfoNoUpdateNoHide() {
-    this.clearInfoRedrawCallabckID();
-    this.clearInfoHideCallabckID();
-    this.infoRedrawCallbackID = 0;
-    this.infoHideCallbackID = 0;
-    this.redraw();
-    this.infoRedrawCallbackID = -1;
-    this.infoHideCallbackID = -1;
-  }
-
   requestInfoShow() {
     this.clearInfoRedrawCallabckID();
     this.clearInfoHideCallabckID();
@@ -420,9 +391,7 @@ export default class PlaybackView extends React.Component {
   redraw() {
     //Calling the this.setState() here makes the component to launch it's render() method,
     //which results in redraw all its contents (including the embedded components recursively).
-    this.setState({
-      selectedIndex: this.state.selectedIndex
-    });
+    this.forceUpdate(this.render);
   }
   render() {
     const index = this.state.selectedIndex;

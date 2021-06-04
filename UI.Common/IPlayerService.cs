@@ -24,7 +24,6 @@ using JuvoPlayer.Common;
 
 namespace UI.Common
 {
-
     public interface IPlayerService : IDisposable
     {
         TimeSpan Duration { get; }
@@ -39,7 +38,6 @@ namespace UI.Common
         Task<List<StreamDescription>> GetStreamsDescription(StreamType streamType);
         Task SetSource(ClipDefinition clip);
         Task Start();
-        Task Stop();
         Task Suspend();
         Task Resume();
         IObservable<PlayerState> StateChanged();

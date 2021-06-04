@@ -17,7 +17,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Reactive;
 using System.Threading;
 using System.Threading.Tasks;
 using ReactNative;
@@ -37,14 +36,13 @@ namespace JuvoReactNative
     public class JuvoPlayerModule : ReactContextNativeModuleBase, ILifecycleEventListener, ISeekLogicClient
     {
         private Timer playbackTimer;
-        private SeekLogic seekLogic = null; // needs to be initialized in the constructor!
+        private readonly SeekLogic seekLogic = null; // needs to be initialized in the constructor!
 
         private const string Tag = "JuvoRN";
         private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger(Tag);
 
         EcoreEvent<EcoreKeyEventArgs> _keyDown;
         EcoreEvent<EcoreKeyEventArgs> _keyUp;
-        Window window = ReactProgram.RctWindow; //The main window of the application has to be transparent.
 
         // assumes StreamType values are sequential [0..N]
         List<StreamDescription>[] allStreamsDescriptions = new List<StreamDescription>[Enum.GetValues(typeof(StreamType)).Length];
@@ -65,7 +63,6 @@ namespace JuvoReactNative
             seekLogic = new SeekLogic(this);
             this.deepLinkSender = deepLinkSender;
             this.mainSynchronizationContext = mainSynchronizationContext;
-
         }
 
         private void OnDeepLinkReceived(string url)
@@ -116,8 +113,8 @@ namespace JuvoReactNative
         private void OnPlayerStateChanged(PlayerState state)
         {
             var stateStr = state.ToString();
-
             Logger.Info(stateStr);
+
             int interval = 100;
             switch (state)
             {
@@ -150,23 +147,23 @@ namespace JuvoReactNative
         {
             Logger.LogEnter();
 
-            playerStateChangeSub?.Dispose();
-            playbackErrorsSub?.Dispose();
-            bufferingProgressSub?.Dispose();
-            eosSub?.Dispose();
+            playerStateChangeSub.Dispose();
+            playbackErrorsSub.Dispose();
+            bufferingProgressSub.Dispose();
+            eosSub.Dispose();
 
             Logger.LogExit();
         }
 
         public void OnDestroy()
         {
-            Logger?.Info("Destroying JuvoPlayerModule...");
+            Logger.Info("Destroying JuvoPlayerModule...");
             DisposePlayerSubscribers();
             seekCompletedSub.Dispose();
-            deepLinkSub?.Dispose();
-            playbackTimer?.Dispose();
+            deepLinkSub.Dispose();
+            playbackTimer.Dispose();
             playbackTimer = null;
-            Player?.Dispose();
+            Player.Dispose();
             Player = null;
         }
 
@@ -211,13 +208,6 @@ namespace JuvoReactNative
             param.Add("Current", (int)seekLogic.CurrentPositionUI.TotalMilliseconds);
             param.Add("SubtiteText", txt);
             SendEvent("onUpdatePlayTime", param);
-        }
-
-        public void OnError(Exception error)
-        {
-            var param = new JObject();
-            param.Add("Message", error.Message);
-            SendEvent("onPlaybackError", param);
         }
 
         //////////////////JS methods//////////////////
@@ -302,37 +292,45 @@ namespace JuvoReactNative
         }
 
         [ReactMethod]
-        public async void InitialiseAndStart(string videoURI, string drmDatasJSON, string streamingProtocol, IPromise promise)
+        public void InitialisePlayback()
         {
-            async Task InitialiseAndStartInternal(string uri, List<DrmDescription> drm, string protocol)
+            Logger.LogEnter();
+            
+            playbackTimer = new Timer(
+                callback: new TimerCallback(UpdatePlayTime),
+                state: seekLogic.CurrentPositionUI,
+                Timeout.Infinite, Timeout.Infinite);
+
+            seekCompletedSub = seekLogic.SeekCompleted().Subscribe(message =>
             {
-                seekCompletedSub = seekLogic.SeekCompleted().Subscribe(message =>
+                var param = new JObject();
+                SendEvent("onSeekCompleted", param);
+            });
+
+            Player = new PlayerService.PlayerService();
+
+            bufferingProgressSub = Player.BufferingProgress().Subscribe(UpdateBufferingProgress);
+            eosSub = Player.EndOfStream().Subscribe(_ => SendEvent("onEndOfStream", new JObject()));
+            playbackErrorsSub = Player.PlaybackError()
+                .Subscribe(message =>
                 {
                     var param = new JObject();
-                    SendEvent("onSeekCompleted", param);
+                    param.Add("Message", message);
+                    SendEvent("onPlaybackError", param);
                 });
+            playerStateChangeSub = Player.StateChanged().Subscribe(OnPlayerStateChanged, OnPlaybackCompleted);
 
-                playbackTimer = new Timer(
-                    callback: new TimerCallback(UpdatePlayTime),
-                    state: seekLogic.CurrentPositionUI,
-                    Timeout.Infinite, Timeout.Infinite);
+            Logger.LogExit();
+        }
 
-                Player = new PlayerService.PlayerService();
-                Player.SetWindow(window);
+        [ReactMethod]
+        public async void StartPlayback(string videoURI, string drmDatasJSON, string streamingProtocol, IPromise promise)
+        {
+            async Task StartPlaybackInternal(string uri, List<DrmDescription> drm, string protocol)
+            {
+                Logger.Info();
 
-                playerStateChangeSub = Player.StateChanged().Subscribe(OnPlayerStateChanged, OnPlaybackCompleted);
-
-                playbackErrorsSub = Player.PlaybackError()
-                    .Subscribe(message =>
-                    {
-                        var param = new JObject();
-                        param.Add("Message", message);
-                        SendEvent("onPlaybackError", param);
-                    });
-
-                bufferingProgressSub = Player.BufferingProgress().Subscribe(UpdateBufferingProgress);
-
-                eosSub = Player.EndOfStream().Subscribe(_ => SendEvent("onEndOfStream", new JObject()));
+                Player.SetWindow(ReactProgram.RctWindow);
 
                 await Player.SetSource(new ClipDefinition
                 {
@@ -347,7 +345,6 @@ namespace JuvoReactNative
                 if (Player.State == PlayerState.Ready)
                 {
                     seekLogic.Reset();
-
                     await Player.Start();
                 }
             }
@@ -356,7 +353,7 @@ namespace JuvoReactNative
 
             if (videoURI != null)
             {
-                await InitialiseAndStartInternal(
+                await StartPlaybackInternal(
                         videoURI,
                         (drmDatasJSON != null)
                             ? JSONFileReader.DeserializeJsonText<List<DrmDescription>>(drmDatasJSON)
@@ -373,74 +370,14 @@ namespace JuvoReactNative
 
             Logger.LogExit();
         }
-
-        [ReactMethod]
-        public async void SetSource(string videoURI, string drmDatasJSON, string streamingProtocol, IPromise promise)
-        {
-            Logger.LogEnter(videoURI);
-
-            if (videoURI == null)
-            {
-                Logger.Error("No stream");
-                promise.Resolve(default);
-                return;
-            }
-
-            if (Player.State == PlayerState.Playing)
-            {
-                Logger.Warn("Already in playing state");
-                promise.Resolve(default);
-                return;
-            }
-
-            var drmDataList = (drmDatasJSON != null) ? JSONFileReader.DeserializeJsonText<List<DrmDescription>>(drmDatasJSON) : new List<DrmDescription>();
-
-            await Player.SetSource(new ClipDefinition
-            {
-                Type = streamingProtocol,
-                Url = videoURI,
-                Subtitles = new List<SubtitleInfo>(),
-                DRMDatas = drmDataList
-            }).ConfigureAwait(false);
-
-            seekLogic.Reset();
-            promise.Resolve(default);
-
-            Logger.LogExit();
-        }
-
-        [ReactMethod]
-        public void InitialisePlayerService()
-        {
-            Logger.LogEnter();
-
-            Player = new PlayerService.PlayerService();
-            Player.SetWindow(window);
-
-            playerStateChangeSub = Player.StateChanged().Subscribe(OnPlayerStateChanged, OnPlaybackCompleted);
-
-            playbackErrorsSub = Player.PlaybackError()
-                .Subscribe(message =>
-                {
-                    var param = new JObject();
-                    param.Add("Message", message);
-                    SendEvent("onPlaybackError", param);
-                });
-
-            bufferingProgressSub = Player.BufferingProgress().Subscribe(UpdateBufferingProgress);
-
-            eosSub = Player.EndOfStream().Subscribe(_ => SendEvent("onEndOfStream", new JObject()));
-
-            Logger.LogExit();
-        }
-
+        
         [ReactMethod]
         public void StopPlayback()
         {
             if (Player == null)
                 return;
 
-            Logger.Info("");
+            Logger.Info();
 
             OnDestroy();
         }

@@ -40,7 +40,7 @@ namespace PlayerService
             catch (Exception e)
             {
                 Logger.Error($"{e.GetType()} {e.Message}");
-                reportTo.OnNext(e.Message);
+                reportTo?.OnNext(e.Message);
             }
         }
 
@@ -53,7 +53,7 @@ namespace PlayerService
             catch (Exception e)
             {
                 Logger.Error($"{e.GetType()} {e.Message}");
-                reportTo.OnNext(e.Message);
+                reportTo?.OnNext(e.Message);
                 return default;
             }
         }
