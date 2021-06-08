@@ -23,7 +23,6 @@ using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Reactive.Threading.Tasks;
 using JuvoPlayer.Common;
 using static UI.Common.Defaults.SeekLogic;
 
@@ -136,15 +135,8 @@ namespace UI.Common
             {
                 await _seekDelay;
                 var player = _client.Player;
-                if (player == null)
+                if (player == null || player.State != PlayerState.Playing)
                     return;
-                if (player.State != PlayerState.Playing)
-                {
-                    await player.StateChanged()
-                        .Where(state => state == PlayerState.Playing)
-                        .FirstAsync()
-                        .ToTask(_seekCancellationTokenSource.Token);
-                }
             }
             catch (TaskCanceledException)
             {
@@ -205,7 +197,7 @@ namespace UI.Common
 
         private static bool IsStateSeekable(PlayerState state)
         {
-            var seekableStates = new[] {PlayerState.Playing, PlayerState.Paused};
+            var seekableStates = new[] { PlayerState.Playing, PlayerState.Paused };
             return seekableStates.Contains(state);
         }
 

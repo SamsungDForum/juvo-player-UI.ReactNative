@@ -40,7 +40,6 @@ namespace UI.Common
         Task Start();
         Task Suspend();
         Task Resume();
-        IObservable<PlayerState> StateChanged();
         IObservable<string> PlaybackError();
         IObservable<int> BufferingProgress();
         IObservable<Unit> EndOfStream();

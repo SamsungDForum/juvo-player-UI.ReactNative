@@ -24,6 +24,7 @@ using System.Threading.Tasks;
 using Nito.AsyncEx;
 using UI.Common;
 using System.Reactive.Subjects;
+using System.Threading;
 using JuvoPlayer;
 using JuvoPlayer.Common;
 using JuvoPlayer.Drms;
@@ -37,7 +38,6 @@ namespace PlayerService
         private readonly AsyncContextThread _playerThread = new AsyncContextThread();
         private Window _window;
         private IPlayer _player;
-        private BehaviorSubject<PlayerState> _playerStateSubject = new BehaviorSubject<PlayerState>(PlayerState.None);
         private Subject<string> _errorSubject = new Subject<string>();
         private Subject<int> _bufferingSubject = new Subject<int>();
         private Subject<Unit> _endOfStream = new Subject<Unit>();
@@ -83,48 +83,43 @@ namespace PlayerService
         {
             async Task TerminateJob()
             {
-                Logger.Info("Terminating subjects");
+                Logger.Info();
+
+                _playerEventSubscription.Dispose();
 
                 // Terminate subjects on player thread. Any pending thread jobs will handle terminated subjects,
                 // _playerStateSubject in particular, gracefully.
                 _errorSubject.OnCompleted();
                 _bufferingSubject.OnCompleted();
-                _playerStateSubject.OnCompleted();
                 _endOfStream.OnCompleted();
 
                 _errorSubject.Dispose();
                 _bufferingSubject.Dispose();
-                _playerStateSubject.Dispose();
                 _endOfStream.Dispose();
 
                 _errorSubject = null;
                 _bufferingSubject = null;
-                _playerStateSubject = null;
                 _endOfStream = null;
 
+                Logger.Info("Disposed event subjects");
                 if (_player != null)
                 {
-                    Logger.Info("Disposing player");
-
                     try
                     {
                         await _player.DisposeAsync();
+                        Logger.Info("Disposed player");
+
                     }
                     catch (Exception e)
                     {
                         Logger.Warn($"Ignoring exception: {e}");
-                    }
-                    finally
-                    {
-                        _playerEventSubscription.Dispose();
                     }
                 }
             }
 
             Logger.LogEnter();
 
-            // wait for job start and do not report termination errors (if any)
-            var job = _playerThread.ThreadJob(async () => await TerminateJob()).Result;
+            var job = await _playerThread.ThreadJob(TerminateJob).ConfigureAwait(false);
             await job.ConfigureAwait(false);
 
             Logger.LogExit();
@@ -153,7 +148,7 @@ namespace PlayerService
         {
             Logger.LogEnter();
 
-            _ = TerminatePlayer();
+            WaitHandle.WaitAll(new[] { ((IAsyncResult)TerminatePlayer()).AsyncWaitHandle });
             _playerThread.Join();
 
             Logger.LogExit();
@@ -162,7 +157,7 @@ namespace PlayerService
         public TimeSpan Duration => _player?.Duration ?? TimeSpan.Zero;
         public TimeSpan CurrentPosition => _player?.Position ?? TimeSpan.Zero;
         public bool IsSeekingSupported => true;
-        public PlayerState State => _playerStateSubject.Value;
+        public PlayerState State => _player?.State ?? PlayerState.None;
         public string CurrentCueText { get; }
 
         public async Task Pause()
@@ -172,7 +167,6 @@ namespace PlayerService
                 Logger.Info();
 
                 await _player.Pause();
-                _playerStateSubject?.OnNext(_player.State);
             }
 
             Logger.LogEnter();
@@ -289,7 +283,6 @@ namespace PlayerService
                     _player = BuildDashPlayer(source);
                     _playerEventSubscription = SubscribePlayerEvents(_player, e => OnEvent(e));
                     await _player.Prepare();
-                    _playerStateSubject?.OnNext(_player.State);
                 }
                 catch (Exception e)
                 {
@@ -322,7 +315,6 @@ namespace PlayerService
                 Logger.Info();
 
                 _player.Play();
-                _playerStateSubject?.OnNext(_player.State);
             }
 
             Logger.LogEnter();
@@ -358,7 +350,6 @@ namespace PlayerService
             Logger.LogExit();
         }
 
-        public IObservable<PlayerState> StateChanged() => _playerStateSubject.DistinctUntilChanged().Publish().RefCount();
         public IObservable<string> PlaybackError() => _errorSubject.Publish().RefCount();
         public IObservable<int> BufferingProgress() => _bufferingSubject.Publish().RefCount();
         public IObservable<Unit> EndOfStream() => _endOfStream.Publish().RefCount();
