@@ -44,7 +44,7 @@ namespace PlayerService
         private IDisposable _playerEventSubscription;
 
         private ClipDefinition _currentClip;
-        private TimeSpan _suspendTimeIndex;
+        private TimeSpan? _suspendTimeIndex;
 
         private IPlayer BuildDashPlayer(ClipDefinition clip, Configuration configuration = default)
         {
@@ -83,10 +83,6 @@ namespace PlayerService
         {
             async Task TerminateJob()
             {
-                Logger.Info();
-
-                _playerEventSubscription.Dispose();
-
                 // Terminate subjects on player thread. Any pending thread jobs will handle terminated subjects,
                 // _playerStateSubject in particular, gracefully.
                 _errorSubject.OnCompleted();
@@ -106,6 +102,9 @@ namespace PlayerService
                 {
                     try
                     {
+                        _playerEventSubscription.Dispose();
+                        _playerEventSubscription = default;
+
                         await _player.DisposeAsync();
                         Logger.Info("Disposed player");
 
@@ -164,9 +163,8 @@ namespace PlayerService
         {
             async Task PauseJob()
             {
-                Logger.Info();
-
                 await _player.Pause();
+                Logger.Info(_player.State.ToString());
             }
 
             Logger.LogEnter();
@@ -283,6 +281,7 @@ namespace PlayerService
                     _player = BuildDashPlayer(source);
                     _playerEventSubscription = SubscribePlayerEvents(_player, e => OnEvent(e));
                     await _player.Prepare();
+                    Logger.Info(_player.State.ToString());
                 }
                 catch (Exception e)
                 {
@@ -312,9 +311,8 @@ namespace PlayerService
         {
             async Task StartJob()
             {
-                Logger.Info();
-
                 _player.Play();
+                Logger.Info(_player.State.ToString());
             }
 
             Logger.LogEnter();
@@ -330,22 +328,76 @@ namespace PlayerService
 
         public async Task Suspend()
         {
+            async Task SuspendJob()
+            {
+                _suspendTimeIndex = _player.Position ?? TimeSpan.Zero;
+                _playerEventSubscription.Dispose();
+                _playerEventSubscription = null;
+
+                try
+                {
+                    await _player.DisposeAsync();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn($"Ignoring exception: {ex.Message}");
+                }
+
+                _player = null;
+
+                Logger.Info($"Suspend position: {_suspendTimeIndex}");
+            }
+
             Logger.LogEnter();
 
-            await Pause().ConfigureAwait(false);
-            _suspendTimeIndex = _player.Position ?? TimeSpan.Zero;
-            await TerminatePlayer().ConfigureAwait(false);
+            var job = await _playerThread.ThreadJob(() => SuspendJob()).ConfigureAwait(false);
+            await job.ConfigureAwait(false);
 
-            Logger.LogExit($"Suspended {_suspendTimeIndex}");
+            Logger.LogExit();
         }
 
         public async Task Resume()
         {
-            Logger.LogEnter($"Resuming {_suspendTimeIndex}");
+            async Task<PlayerState> ResumeJob()
+            {
+                try
+                {
+                    _player = BuildDashPlayer(_currentClip);
+                    _playerEventSubscription = SubscribePlayerEvents(_player, e => OnEvent(e));
+                    await _player.Prepare();
+                    await _player.Seek(_suspendTimeIndex.Value);
+                    _player.Play();
+                }
+                catch (Exception e)
+                {
+                    Logger.Error($"Prepare failed {e.Message}");
 
-            await SetSource(_currentClip).ConfigureAwait(false);
-            await SeekTo(_suspendTimeIndex).ConfigureAwait(false);
-            await Start().ConfigureAwait(false);
+                    if (_player != default)
+                    {
+                        await _player.DisposeAsync();
+                    }
+
+                    throw;
+                }
+
+                Logger.Info($"Resumed position/state: {_suspendTimeIndex.Value}/{_player.State}");
+
+                return State;
+            }
+
+            Logger.LogEnter();
+
+            if (!_suspendTimeIndex.HasValue)
+                return;
+
+            var job = await _playerThread
+                .ThreadJob(() => ResumeJob().ReportException(_errorSubject))
+                .ConfigureAwait(false);
+            var resumeState = await job.ConfigureAwait(false);
+
+            // Suspend/Resume calls are not routed through JS. If playing state is not reached, report an error.
+            if (resumeState != PlayerState.Playing)
+                _errorSubject.OnNext($"Resume failed. State {resumeState}");
 
             Logger.LogExit();
         }
