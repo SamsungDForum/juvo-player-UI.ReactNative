@@ -278,6 +278,9 @@ namespace PlayerService
 
                 try
                 {
+                    if (!clip.Type.Equals("dash", StringComparison.InvariantCultureIgnoreCase))
+                        throw new NotSupportedException($"Unsupported protocol: {clip.Type}");
+
                     _player = BuildDashPlayer(source);
                     _playerEventSubscription = SubscribePlayerEvents(_player, e => OnEvent(e));
                     await _player.Prepare();
@@ -350,7 +353,7 @@ namespace PlayerService
 
             Logger.LogEnter();
 
-            var job = await _playerThread.ThreadJob(() => SuspendJob()).ConfigureAwait(false);
+            var job = await _playerThread.ThreadJob(() => SuspendJob().ReportException(_errorSubject)).ConfigureAwait(false);
             await job.ConfigureAwait(false);
 
             Logger.LogExit();

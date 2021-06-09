@@ -163,8 +163,15 @@ namespace JuvoReactNative
             {
                 Context.RunOnNativeModulesQueueThread(async () =>
                 {
-                    await Player.Resume();
-                    ResumeTimedDataUpdate();
+                    try
+                    {
+                        await Player.Resume();
+                        ResumeTimedDataUpdate();
+                    }
+                    catch
+                    {
+                        // Ignore. Errors are reported by Resume().
+                    }
                 });
             }
 
@@ -180,9 +187,16 @@ namespace JuvoReactNative
             {
                 Context.RunOnNativeModulesQueueThread(async () =>
                 {
-                    seekLogic.Reset();
-                    SuspendTimedDataUpdate();
-                    await Player.Suspend();
+                    try
+                    {
+                        seekLogic.Reset();
+                        SuspendTimedDataUpdate();
+                        await Player.Suspend();
+                    }
+                    catch
+                    {
+                        // Ignore. Errors are reported by Suspend().
+                    }
                 });
             }
 
@@ -281,9 +295,9 @@ namespace JuvoReactNative
                 param.Add("StreamTypeIndex", StreamTypeIndex);
                 promise.Resolve(param);
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                promise.Reject(string.Empty, ex);
+                promise.Reject(e.Message, e);
             }
 
             Logger.LogExit();
@@ -317,9 +331,9 @@ namespace JuvoReactNative
                 var playerState = await SetStreamInternal(SelectedIndex, StreamTypeIndex).ConfigureAwait(false);
                 promise.Resolve(playerState.ToString());
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                promise.Reject(string.Empty, ex);
+                promise.Reject(e.Message, e);
             }
 
             Logger.LogExit();
@@ -372,8 +386,15 @@ namespace JuvoReactNative
                 }
                 else
                 {
-                    await StartPlaybackInternal(videoURI, drmList, streamingProtocol).ConfigureAwait(false);
-                    promise.Resolve(Player.State.ToString());
+                    try
+                    {
+                        await StartPlaybackInternal(videoURI, drmList, streamingProtocol).ConfigureAwait(false);
+                        promise.Resolve(Player.State.ToString());
+                    }
+                    catch (Exception e)
+                    {
+                        promise.Reject(e.Message, e);
+                    }
                 }
             }
 
@@ -421,8 +442,15 @@ namespace JuvoReactNative
 
             Logger.LogEnter();
 
-            var playerState = await PauseResumePlaybackInternal().ConfigureAwait(false);
-            promise.Resolve(playerState.ToString());
+            try
+            {
+                var playerState = await PauseResumePlaybackInternal().ConfigureAwait(false);
+                promise.Resolve(playerState.ToString());
+            }
+            catch (Exception e)
+            {
+                promise.Reject(e.Message, e);
+            }
 
             Logger.LogExit();
         }

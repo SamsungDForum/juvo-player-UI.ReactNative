@@ -177,7 +177,15 @@ namespace UI.Common
             if (IsStateSeekable(State))
             {
                 IsSeekInProgress = true;
-                await _client.Player?.SeekTo(_targetSeekTime);
+                try
+                {
+                    await _client.Player?.SeekTo(_targetSeekTime);
+                }
+                catch
+                {
+                    // ignore. Failures are reported by SeekTo()
+                }
+
                 IsSeekAccumulationInProgress = false;
                 IsSeekInProgress = false;
             }

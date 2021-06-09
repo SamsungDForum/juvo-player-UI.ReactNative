@@ -205,8 +205,10 @@ export default class PlaybackView extends React.Component {
       case 'None':
       case 'Idle':
       case 'Ready':
-        // Transition to playing state did not complete. Switch back to content selection.
-        this.toggleView();
+        // Transition to playing state did not complete. 
+        // Switch back to content selection if there's no error popup.
+        if(this.showNotificationPopup == false)
+          this.toggleView();
         break;
 
       case 'Playing':

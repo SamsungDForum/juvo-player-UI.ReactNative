@@ -41,6 +41,7 @@ namespace PlayerService
             {
                 Logger.Error($"{e.GetType()} {e.Message}");
                 reportTo?.OnNext(e.Message);
+                throw;
             }
         }
 
@@ -54,7 +55,7 @@ namespace PlayerService
             {
                 Logger.Error($"{e.GetType()} {e.Message}");
                 reportTo?.OnNext(e.Message);
-                return default;
+                throw;
             }
         }
     }
