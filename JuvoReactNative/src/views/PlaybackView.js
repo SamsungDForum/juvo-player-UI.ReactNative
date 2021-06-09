@@ -173,16 +173,17 @@ export default class PlaybackView extends React.Component {
     const video = ResourceLoader.clipsData[this.state.selectedIndex];
     let DRM = video.drmDatas ? JSON.stringify(video.drmDatas) : null;
 
-    // Try starting playback
-    await this.JuvoPlayer.StartPlayback(video.url, DRM, video.type).then(
-      postOperationState => 
-      {
-        this.updatePlayerState(postOperationState)
-      },
-      _ => //died trying... 
-      {
-        this.updatePlayerState('None');
-      });
+    // Starting playback
+    try
+    {
+      let playerState = await this.JuvoPlayer.StartPlayback(video.url, DRM, video.type);
+      this.updatePlayerState(playerState);
+    }
+    catch(error)
+    {
+      console.error(error);
+      this.updatePlayerState('None');
+    }
   }
 
   updatePlayerState(newState)
@@ -216,7 +217,6 @@ export default class PlaybackView extends React.Component {
 
       case 'Paused':
         this.requestInfoShow();
-        this.redraw();
         break;
     }
   }
@@ -259,27 +259,28 @@ export default class PlaybackView extends React.Component {
     this.updatePlayerState('None');
   }
 
-  getStreamsDescription() {
+  async getStreamsDescription() {
     var getStreams = !this.infoHideWasRequested();
     this.JuvoPlayer.Log('getStreamsDescription(): '+getStreams);
     //Show the settings view only if the playback controls are visible on the screen
     if (getStreams) {
       //requesting the native module for details regarding the stream settings.
       //The response is handled inside the onGotStreamsDescription() function.
-      
-      Promise.all([
+      try
+      {
+        let streams = await Promise.all([
           this.JuvoPlayer.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Audio),
           this.JuvoPlayer.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Video),
-          this.JuvoPlayer.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Subtitle)])
-        .then( streams => //success
-        {
-          this.JuvoPlayer.Log('getStreamsDescriptionAsync(): got all streams');
-          streams.forEach(stream => this.onGotStreamsDescription(stream));
-        },
-        _ => // failure
-        {
-          this.updatePlayerState('None');
-        });
+          this.JuvoPlayer.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Subtitle)]);
+
+        this.JuvoPlayer.Log('getStreamsDescriptionAsync(): got all streams');
+        streams.forEach(stream => this.onGotStreamsDescription(stream));
+      }
+      catch(error)
+      {
+        console.error(error);
+        this.updatePlayerState('None');
+      }
     }
   }
 
@@ -288,17 +289,16 @@ export default class PlaybackView extends React.Component {
 
     if (this.playerState === 'Paused' || this.playerState === 'Playing') {
       //pause - resume
-      var pPauseResume = this.JuvoPlayer.PauseResumePlayback();
-      this.requestInfoShow();
-      await pPauseResume.then(
-        playerState => // succeeded
-        {
-          this.updatePlayerState(playerState);
-        },
-        _ => // failed
-        {
-          this.updatePlayerState('None');
-        });;
+      try
+      {
+        let playerState = await this.JuvoPlayer.PauseResumePlayback();
+        this.updatePlayerState(playerState);
+      }
+      catch(error)
+      {
+        console.error(error);
+        this.updatePlayerState('None');
+      }
     }
   }
 

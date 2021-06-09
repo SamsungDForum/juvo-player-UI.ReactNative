@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ReactNative;
@@ -291,19 +292,19 @@ namespace JuvoReactNative
         [ReactMethod]
         public async void SetStream(int SelectedIndex, int StreamTypeIndex, IPromise promise)
         {
-            async Task<PlayerState> SetStreamInternal(int selecteIndex, int streamIndex)
+            async Task<PlayerState> SetStreamInternal(int selectedIndex, int streamIndex)
             {
-                bool haveStreamData = allStreamsDescriptions[StreamTypeIndex] != null && selecteIndex != -1;
+                bool haveStreamData = allStreamsDescriptions[StreamTypeIndex] != null && selectedIndex != -1;
                 StreamType streamType = (StreamType)streamIndex;
 
                 Logger.Info($"{streamType} Have data: {haveStreamData}");
 
                 if (haveStreamData)
                 {
-                    if (streamType == StreamType.Subtitle && selecteIndex == 0)
+                    if (streamType == StreamType.Subtitle && selectedIndex == 0)
                         Player.DeactivateStream(StreamType.Subtitle);
                     else
-                        await Player.ChangeActiveStream(this.allStreamsDescriptions[streamIndex][selecteIndex]);
+                        await Player.ChangeActiveStream(this.allStreamsDescriptions[streamIndex][selectedIndex]);
                 }
 
                 return Player.State;
@@ -335,8 +336,6 @@ namespace JuvoReactNative
         {
             async Task StartPlaybackInternal(string uri, List<DrmDescription> drm, string protocol)
             {
-                Logger.Info();
-
                 InitialisePlayback();
 
                 await Player.SetSource(new ClipDefinition
@@ -353,21 +352,29 @@ namespace JuvoReactNative
 
             Logger.LogEnter();
 
-            if (videoURI != null)
+            if (string.IsNullOrWhiteSpace(videoURI))
             {
-                await StartPlaybackInternal(
-                       videoURI,
-                       (drmDatasJSON != null)
-                           ? JSONFileReader.DeserializeJsonText<List<DrmDescription>>(drmDatasJSON)
-                           : new List<DrmDescription>(),
-                       streamingProtocol)
-                   .ConfigureAwait(false);
-
-                promise.Resolve(Player.State.ToString());
+                promise.Reject("empty URI", new ArgumentException());
+            }
+            else if (string.IsNullOrWhiteSpace(streamingProtocol))
+            {
+                promise.Reject("empty protocol", new ArgumentException());
             }
             else
             {
-                promise.Reject(string.Empty, new ArgumentNullException());
+                var drmList = string.IsNullOrWhiteSpace(drmDatasJSON)
+                    ? Enumerable.Empty<DrmDescription>().ToList()
+                    : JSONFileReader.DeserializeJsonText<List<DrmDescription>>(drmDatasJSON);
+
+                if (drmList == null)
+                {
+                    promise.Reject("invalid drm", new ArgumentException());
+                }
+                else
+                {
+                    await StartPlaybackInternal(videoURI, drmList, streamingProtocol).ConfigureAwait(false);
+                    promise.Resolve(Player.State.ToString());
+                }
             }
 
             Logger.LogExit();
