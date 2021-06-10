@@ -31,7 +31,7 @@ namespace PlayerService
         public static Task ThreadJob(this AsyncContextThread thread, Action threadAction) =>
             thread.Factory.StartNew(threadAction, TaskCreationOptions.DenyChildAttach);
 
-        public static async Task ReportException(this Task threadJob, Subject<string> reportTo)
+        public static async Task ReportException(this Task threadJob, Subject<string> reportTo, string messsage = default)
         {
             try
             {
@@ -40,12 +40,12 @@ namespace PlayerService
             catch (Exception e)
             {
                 Logger.Error($"{e.GetType()} {e.Message}");
-                reportTo?.OnNext(e.Message);
+                reportTo?.OnNext(messsage ?? e.Message);
                 throw;
             }
         }
 
-        public static async Task<TResult> ReportException<TResult>(this Task<TResult> threadJob, Subject<string> reportTo)
+        public static async Task<TResult> ReportException<TResult>(this Task<TResult> threadJob, Subject<string> reportTo, string messsage = default)
         {
             try
             {
@@ -54,7 +54,7 @@ namespace PlayerService
             catch (Exception e)
             {
                 Logger.Error($"{e.GetType()} {e.Message}");
-                reportTo?.OnNext(e.Message);
+                reportTo?.OnNext(messsage ?? e.Message);
                 throw;
             }
         }

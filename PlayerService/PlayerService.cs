@@ -46,6 +46,13 @@ namespace PlayerService
         private ClipDefinition _currentClip;
         private TimeSpan? _suspendTimeIndex;
 
+        private const string _pauseFailMessage = "Ooops! Something went wrong when pausing.";
+        private const string _resumeFailMessage = "Bugger! Resume did not succeed.";
+        private const string _changeStreamFailMessage = "Stream change failure caused by ***.";
+        private const string _setSourceFailMessage = "Tried hard.. Failed harder to prepare playback.";
+        private const string _startFailMessage = "Starting playback did not start nor said why.";
+        private const string _seekFailMessage = "Was seeking but got lost along the way.";
+
         private IPlayer BuildDashPlayer(ClipDefinition clip, Configuration configuration = default)
         {
             string SchemeToKeySystem(in string scheme)
@@ -170,7 +177,7 @@ namespace PlayerService
             Logger.LogEnter();
 
             var job = await _playerThread
-                .ThreadJob(() => PauseJob().ReportException(_errorSubject))
+                .ThreadJob(() => PauseJob().ReportException(_errorSubject, _pauseFailMessage))
                 .ConfigureAwait(false);
 
             await job.ConfigureAwait(false);
@@ -189,7 +196,7 @@ namespace PlayerService
             Logger.LogEnter();
 
             var job = await _playerThread
-                .ThreadJob(() => SeekJob(to).ReportException(_errorSubject))
+                .ThreadJob(() => SeekJob(to).ReportException(_errorSubject, _seekFailMessage))
                 .ConfigureAwait(false);
 
             await job.ConfigureAwait(false);
@@ -226,7 +233,7 @@ namespace PlayerService
             Logger.LogEnter();
 
             var job = await _playerThread
-                .ThreadJob(() => ChangeStreamJob(streamDescription).ReportException(_errorSubject))
+                .ThreadJob(() => ChangeStreamJob(streamDescription).ReportException(_errorSubject, _changeStreamFailMessage))
                 .ConfigureAwait(false);
 
             await job.ConfigureAwait(false);
@@ -278,9 +285,6 @@ namespace PlayerService
 
                 try
                 {
-                    if (!clip.Type.Equals("dash", StringComparison.InvariantCultureIgnoreCase))
-                        throw new NotSupportedException($"Unsupported protocol: {clip.Type}");
-
                     _player = BuildDashPlayer(source);
                     _playerEventSubscription = SubscribePlayerEvents(_player, e => OnEvent(e));
                     await _player.Prepare();
@@ -301,11 +305,18 @@ namespace PlayerService
 
             Logger.LogEnter();
 
-            var job = await _playerThread
-                .ThreadJob(() => SetSourceJob(clip).ReportException(_errorSubject))
-                .ConfigureAwait(false);
+            if (!clip.Type.Equals("dash", StringComparison.InvariantCultureIgnoreCase))
+            {
+                _errorSubject.OnNext($"Unsupported protocol: {clip.Type}");
+            }
+            else
+            {
+                var job = await _playerThread
+                    .ThreadJob(() => SetSourceJob(clip).ReportException(_errorSubject, _setSourceFailMessage))
+                    .ConfigureAwait(false);
 
-            await job.ConfigureAwait(false);
+                await job.ConfigureAwait(false);
+            }
 
             Logger.LogExit();
         }
@@ -321,7 +332,7 @@ namespace PlayerService
             Logger.LogEnter();
 
             var job = await _playerThread
-                .ThreadJob(() => StartJob().ReportException(_errorSubject))
+                .ThreadJob(() => StartJob().ReportException(_errorSubject, _startFailMessage))
                 .ConfigureAwait(false);
 
             await job.ConfigureAwait(false);
@@ -353,7 +364,7 @@ namespace PlayerService
 
             Logger.LogEnter();
 
-            var job = await _playerThread.ThreadJob(() => SuspendJob().ReportException(_errorSubject)).ConfigureAwait(false);
+            var job = await _playerThread.ThreadJob(() => SuspendJob()).ConfigureAwait(false);
             await job.ConfigureAwait(false);
 
             Logger.LogExit();
@@ -394,7 +405,7 @@ namespace PlayerService
                 return;
 
             var job = await _playerThread
-                .ThreadJob(() => ResumeJob().ReportException(_errorSubject))
+                .ThreadJob(() => ResumeJob().ReportException(_errorSubject, _resumeFailMessage))
                 .ConfigureAwait(false);
             var resumeState = await job.ConfigureAwait(false);
 

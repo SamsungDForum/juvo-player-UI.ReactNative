@@ -187,16 +187,9 @@ namespace JuvoReactNative
             {
                 Context.RunOnNativeModulesQueueThread(async () =>
                 {
-                    try
-                    {
-                        seekLogic.Reset();
-                        SuspendTimedDataUpdate();
-                        await Player.Suspend();
-                    }
-                    catch
-                    {
-                        // Ignore. Errors are reported by Suspend().
-                    }
+                    seekLogic.Reset();
+                    SuspendTimedDataUpdate();
+                    await Player.Suspend();
                 });
             }
 
