@@ -42,18 +42,15 @@ export default class ContentCatalog extends Component {
     DeviceEventEmitter.removeListener('ContentCatalog/onTVKeyDown', this.onTVKeyDown);
   }
 
-  async componentDidUpdate(prevProps, prevState) {
-    this.JuvoPlayer.Log('ContentCatalog.componentDidUpdate():');
+  componentDidUpdate(prevProps, prevState) {
     return true;
   }
 
   shouldComponentUpdate(nextProps, nextState) {
-    this.JuvoPlayer.Log('ContentCatalog.shouldComponentUpdate():');
     return true;
   }
 
   toggleVisibility() {
-    this.JuvoPlayer.Log('ContentCatalog.toggleVisibility():');
     this.props.switchView('PlaybackView');
   }
   
@@ -61,10 +58,12 @@ export default class ContentCatalog extends Component {
     //There are two parameters available:
     //pressed.KeyName
     //pressed.KeyCode
-    DeviceEventEmitter.emit('ContentScroll/onTVKeyDown', pressed);
-    this.JuvoPlayer.Log('ContentCatalog.onTVKeyDown(): '+pressed.KeyName+' ignore: '+this.keysListenningOff+' Visible: '+this.bigPictureVisible);
-
-    if (this.keysListenningOff) return;
+    
+    if (this.keysListenningOff) 
+    {
+      this.JuvoPlayer.Log('ContentCatalog.onTVKeyDown(): '+pressed.KeyName+' ignored');
+      return;
+    }
 
     switch (pressed.KeyName) {
       case 'XF86AudioStop':
@@ -73,56 +72,46 @@ export default class ContentCatalog extends Component {
       case 'XF86PlayBack':
         if(this.debounceIndexChange != debounceCompleted)
         {
-          // Clear pending updates. Gets updated during playback start thus make index up to date.
-          clearTimeout(this.debounceIndexChange);
-          this.bigPictureVisible = true;
-          this.state.selectedClipIndex = this.candidateIndex;
+          onIndexChangeDebounceCompleted(false);
         }
 
         this.toggleVisibility();
         break;
 
       case 'XF86Back':
-        // Exiting, don't bother updating this.debounceIndexChange.
-        if(this.debounceIndexChange != debounceCompleted)
-          clearTimeout(this.debounceIndexChange);
-        
         this.JuvoPlayer.ExitApp();
         break;
+
+      default:
+        DeviceEventEmitter.emit('ContentScroll/onTVKeyDown', pressed);
+        return;
     }
   }
  
-  onIndexChangeDebounceCompleted()
+  onIndexChangeDebounceCompleted(redraw = true)
   {
     clearTimeout(this.debounceIndexChange);
     this.debounceIndexChange = debounceCompleted;
-
     this.bigPictureVisible = true;
 
-    this.JuvoPlayer.Log('ContentCatalog.onIndexChangeDebounceCompleted(): Index Set: '+this.candidateIndex +' Pending loads: '+this.pendingLoads);
-    
-    this.setState({
-      selectedClipIndex: this.candidateIndex
-    });
-     
+    if(redraw)
+    {
+      this.setState({selectedClipIndex: this.candidateIndex});
+    }
+    else
+    {
+      this.state.selectedClipIndex = this.candidateIndex;
+    }
   }
 
   handleSelectedIndexChange(index) {
-    
-    this.JuvoPlayer.Log('ContentCatalog.handleSelectedIndexChange(): Candidate index: '+ index );
+    // Update index.tizen.js with new index
     this.props.onSelectedIndexChange(index);
 
     if(this.bigPictureVisible)
     {
       this.bigPictureVisible = false;
-      this.JuvoPlayer.Log('ContentCatalog.handleSelectedIndexChange(): Hiding Big pic.');
-      this.forceUpdate(this.render);
-      this.JuvoPlayer.Log('ContentCatalog.handleSelectedIndexChange(): Hiding Big pic. DONE');
-    }
-
-    if(this.debounceIndexChange == debounceCompleted)
-    {
-      this.JuvoPlayer.Log('ContentCatalog.handleSelectedIndexChange(): debouncing index change');
+      this.forceUpdate();
     }
 
     clearTimeout(this.debounceIndexChange);
@@ -141,12 +130,12 @@ export default class ContentCatalog extends Component {
 
     // Don't refresh on last load.
     if(this.pendingLoads > 0)
-      this.forceUpdate(this.render);
+    {
+      this.forceUpdate();
+    }
   }
 
   render() {
-    this.JuvoPlayer.Log('ContentCatalog.render( '+this.state.selectedClipIndex+' ) Big visible: '+this.bigPictureVisible + ' Pending loads: '+this.pendingLoads);
-
     const index = this.state.selectedClipIndex;
     const path = ResourceLoader.tilePaths[index];
     const overlay = ResourceLoader.contentDescriptionBackground;
