@@ -11,13 +11,10 @@ export default class ContentPicture extends React.Component {
     this.JuvoPlayer = NativeModules.JuvoPlayer;
   }
 
-  shouldComponentUpdate(nextProps, nextState) {
-    return true;
-  }
-
   render() {
     const index = typeof this.props.myIndex !== 'undefined' ? this.props.myIndex : this.props.selectedIndex;
     const source = this.props.path ? {uri: this.props.path} : this.props.source ? this.props.source : ResourceLoader.defaultImage;
+
     const imageWidth = this.props.width ? this.props.width : 1920;
     const imageHeight = this.props.height ? this.props.height : 1080;
     const top = this.props.top ? this.props.top : 0;

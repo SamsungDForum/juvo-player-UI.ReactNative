@@ -14,7 +14,6 @@ const itemHeight = 260;
 export default class ContentScroll extends React.Component {
   constructor(props) {
     super(props);
-    this.renderedIndex = -1;
     this.selectedIndex = 0;
     this.deepLinkIndex = 0;
     this.numItems = this.props.contentURIs.length;
@@ -27,16 +26,15 @@ export default class ContentScroll extends React.Component {
   {
     if(newIndex < 0 || newIndex >= this.numItems || newIndex == this.selectedIndex)
       return;
-
+  
     let scrolloffset = newIndex * itemWidth;
     this._scrollView.scrollTo({ x: scrolloffset, y: 0, animated: animate });
+    this.props.onSelectedIndexChange(newIndex);
     this.selectedIndex = newIndex;
-    this.props.onSelectedIndexChange(newIndex);  
   }
 
   shouldComponentUpdate(nextProps, nextState) {
-    let updateRequired = (this.renderedIndex != this.selectedIndex);
-    return updateRequired;
+    return false;
   }
 
   componentWillMount() {
@@ -73,8 +71,7 @@ export default class ContentScroll extends React.Component {
   }
 
   render() {
-    this.renderedIndex = this.selectedIndex;
-    const index = this.renderedIndex;
+    const index = this.selectedIndex;
     const title = ResourceLoader.clipsData[index].title;
     const description = ResourceLoader.clipsData[index].description;
     const overlayIcon = ResourceLoader.playbackIcons.play;

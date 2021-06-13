@@ -15,10 +15,6 @@ const debounceTimeout = 200; // 200ms idle timeout
 export default class ContentCatalog extends Component {
   constructor(props) {
     super(props);
-    this.state = {
-      selectedClipIndex: 0
-    };
-    
     this.bigPictureVisible = this.props.visibility;
     this.keysListenningOff = false;
     this.toggleVisibility = this.toggleVisibility.bind(this);
@@ -32,6 +28,7 @@ export default class ContentCatalog extends Component {
     this.onIndexChangeDebounceCompleted = this.onIndexChangeDebounceCompleted.bind(this);
     this.debounceIndexChange = debounceCompleted;
     this.candidateIndex = 0;
+    this.selectedClipIndex = 0;
   }
 
   componentWillMount() {
@@ -40,14 +37,6 @@ export default class ContentCatalog extends Component {
 
   componentWillUnmount() {
     DeviceEventEmitter.removeListener('ContentCatalog/onTVKeyDown', this.onTVKeyDown);
-  }
-
-  componentDidUpdate(prevProps, prevState) {
-    return true;
-  }
-
-  shouldComponentUpdate(nextProps, nextState) {
-    return true;
   }
 
   toggleVisibility() {
@@ -93,30 +82,31 @@ export default class ContentCatalog extends Component {
     clearTimeout(this.debounceIndexChange);
     this.debounceIndexChange = debounceCompleted;
     this.bigPictureVisible = true;
+    this.selectedClipIndex = this.candidateIndex;
 
     if(redraw)
     {
-      this.setState({selectedClipIndex: this.candidateIndex});
-    }
-    else
-    {
-      this.state.selectedClipIndex = this.candidateIndex;
+      this.forceUpdate();
     }
   }
 
   handleSelectedIndexChange(index) {
+
+    if(this.debounceIndexChange != debounceCompleted)
+    {
+      clearTimeout(this.debounceIndexChange);
+    }
+    
     // Update index.tizen.js with new index
     this.props.onSelectedIndexChange(index);
+    this.candidateIndex = index;
+    this.debounceIndexChange = setTimeout(this.onIndexChangeDebounceCompleted,debounceTimeout);
 
     if(this.bigPictureVisible)
     {
       this.bigPictureVisible = false;
       this.forceUpdate();
     }
-
-    clearTimeout(this.debounceIndexChange);
-    this.candidateIndex = index;
-    this.debounceIndexChange = setTimeout(this.onIndexChangeDebounceCompleted,debounceTimeout);
   }
 
   handleBigPicLoadStart() {
@@ -136,9 +126,11 @@ export default class ContentCatalog extends Component {
   }
 
   render() {
-    const index = this.state.selectedClipIndex;
+    const index = this.selectedClipIndex;
     const path = ResourceLoader.tilePaths[index];
+
     const overlay = ResourceLoader.contentDescriptionBackground;
+
     this.keysListenningOff = !this.props.visibility;
     const showBigPicture = this.bigPictureVisible;
     
@@ -151,7 +143,7 @@ export default class ContentCatalog extends Component {
         <View style={[styles.page, { alignItems: 'flex-end' }]}>
           <View style={[styles.cell, { height: '70%', width: '70%' }]}>
             <HideableView visible={showBigPicture} duration={100}>
-              <ContentPicture selectedIndex={index} path={path} width={'100%'} height={'100%'} 
+              <ContentPicture selectedIndex={index} visible={showBigPicture} path={path} width={'100%'} height={'100%'} 
                 onLoadStart={onLoadStart} 
                 onLoadEnd={onLoadEnd}/>
             </HideableView>
@@ -160,7 +152,6 @@ export default class ContentCatalog extends Component {
         </View>
         <View style={[styles.page, { position: 'absolute' }]}>
           <ContentScroll
-
             onSelectedIndexChange={indexChange}
             contentURIs={ResourceLoader.tilePaths}
             keysListenningOff={this.keysListenningOff}
