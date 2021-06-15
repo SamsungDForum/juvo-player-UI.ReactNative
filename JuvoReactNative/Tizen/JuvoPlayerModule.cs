@@ -219,7 +219,7 @@ namespace JuvoReactNative
             Logger.LogEnter();
 
             playbackTimer = new Timer(
-                callback: new TimerCallback(UpdateTimedData),
+                callback: UpdateTimedData,
                 default,
                 Timeout.Infinite, Timeout.Infinite);
 
