@@ -286,7 +286,7 @@ namespace PlayerService
                 try
                 {
                     _player = BuildDashPlayer(source);
-                    _playerEventSubscription = SubscribePlayerEvents(_player, e => OnEvent(e));
+                    _playerEventSubscription = SubscribePlayerEvents(_player, OnEvent);
                     await _player.Prepare();
                     Logger.Info(_player.State.ToString());
                 }
