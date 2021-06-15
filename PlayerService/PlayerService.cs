@@ -53,6 +53,12 @@ namespace PlayerService
         private const string _startFailMessage = "Starting playback did not start nor said why.";
         private const string _seekFailMessage = "Was seeking but got lost along the way.";
 
+        public TimeSpan Duration => _player?.Duration ?? TimeSpan.Zero;
+        public TimeSpan CurrentPosition => _player?.Position ?? TimeSpan.Zero;
+        public bool IsSeekingSupported => true;
+        public PlayerState State => _player?.State ?? PlayerState.None;
+        public string CurrentCueText { get; }
+
         private IPlayer BuildDashPlayer(ClipDefinition clip, Configuration configuration = default)
         {
             string SchemeToKeySystem(in string scheme)
@@ -160,11 +166,7 @@ namespace PlayerService
             Logger.LogExit();
         }
 
-        public TimeSpan Duration => _player?.Duration ?? TimeSpan.Zero;
-        public TimeSpan CurrentPosition => _player?.Position ?? TimeSpan.Zero;
-        public bool IsSeekingSupported => true;
-        public PlayerState State => _player?.State ?? PlayerState.None;
-        public string CurrentCueText { get; }
+       
 
         public async Task Pause()
         {
@@ -268,10 +270,8 @@ namespace PlayerService
                 .ThreadJob(() => GetStreamsJob(streamType).ReportException(_errorSubject))
                 .ConfigureAwait(false);
 
-            var streamList = await job.ConfigureAwait(false);
-            if (streamList == default)
-                streamList = new List<StreamDescription>();
-
+            var streamList = await job.ConfigureAwait(false) ?? new List<StreamDescription>();
+            
             Logger.LogExit();
             return streamList;
         }
@@ -286,7 +286,7 @@ namespace PlayerService
                 try
                 {
                     _player = BuildDashPlayer(source);
-                    _playerEventSubscription = SubscribePlayerEvents(_player, e => OnEvent(e));
+                    _playerEventSubscription = SubscribePlayerEvents(_player, OnEvent);
                     await _player.Prepare();
                     Logger.Info(_player.State.ToString());
                 }

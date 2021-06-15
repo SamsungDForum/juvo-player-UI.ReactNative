@@ -36,34 +36,34 @@ namespace JuvoReactNative
 {
     public class JuvoPlayerModule : ReactContextNativeModuleBase, ILifecycleEventListener, ISeekLogicClient
     {
-        private Timer playbackTimer;
-        private readonly SeekLogic seekLogic = null; // needs to be initialized in the constructor!
+        private Timer _playbackTimer;
+        private readonly SeekLogic _seekLogic = null; // needs to be initialized in the constructor!
 
         private const string Tag = "JuvoRN";
         private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger(Tag);
 
-        EcoreEvent<EcoreKeyEventArgs> _keyDown;
-        EcoreEvent<EcoreKeyEventArgs> _keyUp;
+        private EcoreEvent<EcoreKeyEventArgs> _keyDown;
+        private EcoreEvent<EcoreKeyEventArgs> _keyUp;
 
         // assumes StreamType values are sequential [0..N]
-        List<StreamDescription>[] allStreamsDescriptions = new List<StreamDescription>[Enum.GetValues(typeof(StreamType)).Length];
+        private readonly List<StreamDescription>[] _allStreamsDescriptions = new List<StreamDescription>[Enum.GetValues(typeof(StreamType)).Length];
         public IPlayerService Player { get; private set; }
-        private IDisposable seekCompletedSub;
-        private IDisposable playbackErrorsSub;
-        private IDisposable bufferingProgressSub;
-        private IDisposable deepLinkSub;
-        private IDisposable eosSub;
-        private IDeepLinkSender deepLinkSender;
-        private readonly SynchronizationContext mainSynchronizationContext;
-        private const int timedDataUpdateInterval = 100; //in ms
+        private IDisposable _seekCompletedSub;
+        private IDisposable _playbackErrorsSub;
+        private IDisposable _bufferingProgressSub;
+        private IDisposable _deepLinkSub;
+        private IDisposable _eosSub;
+        private readonly IDeepLinkSender _deepLinkSender;
+        private readonly SynchronizationContext _mainSynchronizationContext;
+        private static readonly TimeSpan TimedDataUpdateInterval = TimeSpan.FromMilliseconds(100);
 
         public JuvoPlayerModule(ReactContext reactContext, IDeepLinkSender deepLinkSender,
             SynchronizationContext mainSynchronizationContext)
             : base(reactContext)
         {
-            seekLogic = new SeekLogic(this);
-            this.deepLinkSender = deepLinkSender;
-            this.mainSynchronizationContext = mainSynchronizationContext;
+            _seekLogic = new SeekLogic(this);
+            _deepLinkSender = deepLinkSender;
+            _mainSynchronizationContext = mainSynchronizationContext;
         }
 
         private void OnDeepLinkReceived(string url)
@@ -71,13 +71,7 @@ namespace JuvoReactNative
             SendEvent("handleDeepLink", new JObject { { "url", url } });
         }
 
-        public override string Name
-        {
-            get
-            {
-                return "JuvoPlayer";
-            }
-        }
+        public override string Name => "JuvoPlayer";
 
         private void SendEvent(string eventName, JObject parameters)
         {
@@ -93,7 +87,6 @@ namespace JuvoReactNative
             _keyDown = new EcoreEvent<EcoreKeyEventArgs>(EcoreEventType.KeyDown, EcoreKeyEventArgs.Create);
             _keyDown.On += (s, e) =>
             {
-                //Propagate the key press event to JavaScript module
                 var param = new JObject();
                 param.Add("KeyName", e.KeyName);
                 param.Add("KeyCode", e.KeyCode);
@@ -116,7 +109,7 @@ namespace JuvoReactNative
         {
             Logger.LogEnter();
 
-            playbackTimer.Change(0, timedDataUpdateInterval); //resume progress info update
+            _playbackTimer.Change(TimeSpan.Zero, TimedDataUpdateInterval); //resume update
 
             Logger.LogExit();
         }
@@ -125,7 +118,7 @@ namespace JuvoReactNative
         {
             Logger.LogEnter();
 
-            playbackTimer.Change(Timeout.Infinite, Timeout.Infinite); //suspend progress info update
+            _playbackTimer.Change(Timeout.Infinite, Timeout.Infinite); //suspend update
             UpdateTimedData(); // Push out current (last known) timed data
 
             Logger.LogExit();
@@ -135,9 +128,9 @@ namespace JuvoReactNative
         {
             Logger.LogEnter();
 
-            playbackErrorsSub.Dispose();
-            bufferingProgressSub.Dispose();
-            eosSub.Dispose();
+            _playbackErrorsSub.Dispose();
+            _bufferingProgressSub.Dispose();
+            _eosSub.Dispose();
 
             Logger.LogExit();
         }
@@ -146,10 +139,10 @@ namespace JuvoReactNative
         {
             Logger.Info("Destroying JuvoPlayerModule...");
             DisposePlayerSubscribers();
-            seekCompletedSub.Dispose();
-            deepLinkSub.Dispose();
-            playbackTimer.Dispose();
-            playbackTimer = null;
+            _seekCompletedSub.Dispose();
+            _deepLinkSub.Dispose();
+            _playbackTimer.Dispose();
+            _playbackTimer = null;
             Player.Dispose();
             Player = null;
         }
@@ -159,21 +152,22 @@ namespace JuvoReactNative
             bool havePlayer = Player != null;
             Logger.LogEnter($"Have player: {havePlayer}");
 
-            if (havePlayer)
+            if (!havePlayer)
+                return;
+
+            Context.RunOnNativeModulesQueueThread(async () =>
             {
-                Context.RunOnNativeModulesQueueThread(async () =>
+                try
                 {
-                    try
-                    {
-                        await Player.Resume();
-                        ResumeTimedDataUpdate();
-                    }
-                    catch
-                    {
+                    await Player.Resume();
+                    ResumeTimedDataUpdate();
+                }
+                catch
+                {
                         // Ignore. Errors are reported by Resume().
                     }
-                });
-            }
+            });
+            //}
 
             Logger.LogExit();
         }
@@ -187,7 +181,7 @@ namespace JuvoReactNative
             {
                 Context.RunOnNativeModulesQueueThread(async () =>
                 {
-                    seekLogic.Reset();
+                    _seekLogic.Reset();
                     SuspendTimedDataUpdate();
                     await Player.Suspend();
                 });
@@ -208,8 +202,8 @@ namespace JuvoReactNative
         {
             var txt = Player?.CurrentCueText ?? string.Empty;
             var param = new JObject();
-            param.Add("Total", (int)seekLogic.Duration.TotalMilliseconds);
-            param.Add("Current", (int)seekLogic.CurrentPositionUI.TotalMilliseconds);
+            param.Add("Total", (int)_seekLogic.Duration.TotalMilliseconds);
+            param.Add("Current", (int)_seekLogic.CurrentPositionUI.TotalMilliseconds);
             param.Add("SubtiteText", txt);
             SendEvent("onUpdatePlayTime", param);
         }
@@ -218,12 +212,12 @@ namespace JuvoReactNative
         {
             Logger.LogEnter();
 
-            playbackTimer = new Timer(
+            _playbackTimer = new Timer(
                 callback: new TimerCallback(UpdateTimedData),
                 default,
                 Timeout.Infinite, Timeout.Infinite);
 
-            seekCompletedSub = seekLogic.SeekCompleted().Subscribe(message =>
+            _seekCompletedSub = _seekLogic.SeekCompleted().Subscribe(message =>
             {
                 var param = new JObject();
                 SendEvent("onSeekCompleted", param);
@@ -232,9 +226,9 @@ namespace JuvoReactNative
             Player = new PlayerService.PlayerService();
             Player.SetWindow(ReactProgram.RctWindow);
 
-            bufferingProgressSub = Player.BufferingProgress().Subscribe(UpdateBufferingProgress);
-            eosSub = Player.EndOfStream().Subscribe(_ => SendEvent("onEndOfStream", new JObject()));
-            playbackErrorsSub = Player.PlaybackError()
+            _bufferingProgressSub = Player.BufferingProgress().Subscribe(UpdateBufferingProgress);
+            _eosSub = Player.EndOfStream().Subscribe(_ => SendEvent("onEndOfStream", new JObject()));
+            _playbackErrorsSub = Player.PlaybackError()
                 .Subscribe(message =>
                 {
                     var param = new JObject();
@@ -255,7 +249,7 @@ namespace JuvoReactNative
 
                 if (streamType == JuvoPlayer.Common.StreamType.Subtitle)
                 {
-                    allStreamsDescriptions[streamIndex] = new List<StreamDescription>
+                    _allStreamsDescriptions[streamIndex] = new List<StreamDescription>
                     {
                         new StreamDescription
                         {
@@ -266,14 +260,14 @@ namespace JuvoReactNative
                         }
                     };
 
-                    allStreamsDescriptions[streamIndex].AddRange(await Player.GetStreamsDescription(streamType));
+                    _allStreamsDescriptions[streamIndex].AddRange(await Player.GetStreamsDescription(streamType));
                 }
                 else
                 {
-                    allStreamsDescriptions[streamIndex] = await Player.GetStreamsDescription(streamType);
+                    _allStreamsDescriptions[streamIndex] = await Player.GetStreamsDescription(streamType);
                 }
 
-                return allStreamsDescriptions[streamIndex];
+                return _allStreamsDescriptions[streamIndex];
             }
 
 
@@ -301,7 +295,7 @@ namespace JuvoReactNative
         {
             async Task<PlayerState> SetStreamInternal(int selectedIndex, int streamIndex)
             {
-                bool haveStreamData = allStreamsDescriptions[StreamTypeIndex] != null && selectedIndex != -1;
+                bool haveStreamData = _allStreamsDescriptions[StreamTypeIndex] != null && selectedIndex != -1;
                 StreamType streamType = (StreamType)streamIndex;
 
                 Logger.Info($"{streamType} Have data: {haveStreamData}");
@@ -311,7 +305,7 @@ namespace JuvoReactNative
                     if (streamType == StreamType.Subtitle && selectedIndex == 0)
                         Player.DeactivateStream(StreamType.Subtitle);
                     else
-                        await Player.ChangeActiveStream(this.allStreamsDescriptions[streamIndex][selectedIndex]);
+                        await Player.ChangeActiveStream(this._allStreamsDescriptions[streamIndex][selectedIndex]);
                 }
 
                 return Player.State;
@@ -451,26 +445,26 @@ namespace JuvoReactNative
         [ReactMethod]
         public void Forward()
         {
-            seekLogic.SeekForward();
+            _seekLogic.SeekForward();
         }
 
         [ReactMethod]
         public void Rewind()
         {
-            seekLogic.SeekBackward();
+            _seekLogic.SeekBackward();
         }
 
         [ReactMethod]
         public void AttachDeepLinkListener()
         {
-            if (deepLinkSub == null)
-                deepLinkSub = deepLinkSender.DeepLinkReceived().Subscribe(OnDeepLinkReceived);
+            if (_deepLinkSub == null)
+                _deepLinkSub = _deepLinkSender.DeepLinkReceived().Subscribe(OnDeepLinkReceived);
         }
 
         [ReactMethod]
         public void ExitApp()
         {
-            mainSynchronizationContext.Post(_ =>
+            _mainSynchronizationContext.Post(_ =>
             {
                 Application.Current.Exit();
             }, null);
