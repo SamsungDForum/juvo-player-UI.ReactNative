@@ -364,7 +364,7 @@ namespace PlayerService
 
             Logger.LogEnter();
 
-            var job = await _playerThread.ThreadJob(() => SuspendJob()).ConfigureAwait(false);
+            var job = await _playerThread.ThreadJob(SuspendJob).ConfigureAwait(false);
             await job.ConfigureAwait(false);
 
             Logger.LogExit();

@@ -39,8 +39,7 @@ namespace JuvoReactNative
         private Timer _playbackTimer;
         private readonly SeekLogic _seekLogic = null; // needs to be initialized in the constructor!
 
-        private const string Tag = "JuvoRN";
-        private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger(Tag);
+        private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
 
         private EcoreEvent<EcoreKeyEventArgs> _keyDown;
         private EcoreEvent<EcoreKeyEventArgs> _keyUp;
@@ -75,8 +74,7 @@ namespace JuvoReactNative
 
         private void SendEvent(string eventName, JObject parameters)
         {
-            Context.GetJavaScriptModule<RCTDeviceEventEmitter>()
-                .emit(eventName, parameters);
+            Context.GetJavaScriptModule<RCTDeviceEventEmitter>().emit(eventName, parameters);
         }
 
         public override void Initialize()
@@ -87,6 +85,7 @@ namespace JuvoReactNative
             _keyDown = new EcoreEvent<EcoreKeyEventArgs>(EcoreEventType.KeyDown, EcoreKeyEventArgs.Create);
             _keyDown.On += (s, e) =>
             {
+                //Propagate the key press event to JavaScript module
                 var param = new JObject();
                 param.Add("KeyName", e.KeyName);
                 param.Add("KeyCode", e.KeyCode);
@@ -152,22 +151,21 @@ namespace JuvoReactNative
             bool havePlayer = Player != null;
             Logger.LogEnter($"Have player: {havePlayer}");
 
-            if (!havePlayer)
-                return;
-
-            Context.RunOnNativeModulesQueueThread(async () =>
+            if (havePlayer)
             {
-                try
+                Context.RunOnNativeModulesQueueThread(async () =>
                 {
-                    await Player.Resume();
-                    ResumeTimedDataUpdate();
-                }
-                catch
-                {
+                    try
+                    {
+                        await Player.Resume();
+                        ResumeTimedDataUpdate();
+                    }
+                    catch
+                    {
                         // Ignore. Errors are reported by Resume().
                     }
-            });
-            //}
+                });
+            }
 
             Logger.LogExit();
         }
@@ -212,16 +210,8 @@ namespace JuvoReactNative
         {
             Logger.LogEnter();
 
-            _playbackTimer = new Timer(
-                callback: new TimerCallback(UpdateTimedData),
-                default,
-                Timeout.Infinite, Timeout.Infinite);
-
-            _seekCompletedSub = _seekLogic.SeekCompleted().Subscribe(message =>
-            {
-                var param = new JObject();
-                SendEvent("onSeekCompleted", param);
-            });
+            _playbackTimer = new Timer(UpdateTimedData, default, Timeout.Infinite, Timeout.Infinite);
+            _seekCompletedSub = _seekLogic.SeekCompleted().Subscribe(_ => SendEvent("onSeekCompleted", new JObject()));
 
             Player = new PlayerService.PlayerService();
             Player.SetWindow(ReactProgram.RctWindow);
@@ -241,13 +231,13 @@ namespace JuvoReactNative
 
         //////////////////JS methods//////////////////
         [ReactMethod]
-        public async void GetStreamsDescription(int StreamTypeIndex, IPromise promise)
+        public async void GetStreamsDescription(int streamTypeIndex, IPromise promise)
         {
             async Task<List<StreamDescription>> GetStreamsDescriptionInternal(int streamIndex, StreamType streamType)
             {
                 Logger.Info($"{streamType}");
 
-                if (streamType == JuvoPlayer.Common.StreamType.Subtitle)
+                if (streamType == StreamType.Subtitle)
                 {
                     _allStreamsDescriptions[streamIndex] = new List<StreamDescription>
                     {
@@ -277,9 +267,9 @@ namespace JuvoReactNative
             {
                 var param = new JObject();
                 param.Add("Description", Newtonsoft.Json.JsonConvert.SerializeObject(
-                    await GetStreamsDescriptionInternal(StreamTypeIndex, (StreamType)StreamTypeIndex)
+                    await GetStreamsDescriptionInternal(streamTypeIndex, (StreamType)streamTypeIndex)
                         .ConfigureAwait(false)));
-                param.Add("StreamTypeIndex", StreamTypeIndex);
+                param.Add("StreamTypeIndex", streamTypeIndex);
                 promise.Resolve(param);
             }
             catch (Exception e)
@@ -291,11 +281,11 @@ namespace JuvoReactNative
         }
 
         [ReactMethod]
-        public async void SetStream(int SelectedIndex, int StreamTypeIndex, IPromise promise)
+        public async void SetStream(int selectionIndex, int streamTypeIndex, IPromise promise)
         {
             async Task<PlayerState> SetStreamInternal(int selectedIndex, int streamIndex)
             {
-                bool haveStreamData = _allStreamsDescriptions[StreamTypeIndex] != null && selectedIndex != -1;
+                bool haveStreamData = _allStreamsDescriptions[streamTypeIndex] != null && selectedIndex != -1;
                 StreamType streamType = (StreamType)streamIndex;
 
                 Logger.Info($"{streamType} Have data: {haveStreamData}");
@@ -315,7 +305,7 @@ namespace JuvoReactNative
 
             try
             {
-                var playerState = await SetStreamInternal(SelectedIndex, StreamTypeIndex).ConfigureAwait(false);
+                var playerState = await SetStreamInternal(selectionIndex, streamTypeIndex).ConfigureAwait(false);
                 promise.Resolve(playerState.ToString());
             }
             catch (Exception e)
@@ -363,25 +353,18 @@ namespace JuvoReactNative
             }
             else
             {
-                var drmList = string.IsNullOrWhiteSpace(drmDatasJSON)
-                    ? Enumerable.Empty<DrmDescription>().ToList()
-                    : JSONFileReader.DeserializeJsonText<List<DrmDescription>>(drmDatasJSON);
+                try
+                {
+                    var drmList = string.IsNullOrWhiteSpace(drmDatasJSON)
+                        ? Enumerable.Empty<DrmDescription>().ToList()
+                        : JSONFileReader.DeserializeJsonText<List<DrmDescription>>(drmDatasJSON);
 
-                if (drmList == null)
-                {
-                    promise.Reject("invalid drm", new ArgumentException());
+                    await StartPlaybackInternal(videoURI, drmList, streamingProtocol).ConfigureAwait(false);
+                    promise.Resolve(Player.State.ToString());
                 }
-                else
+                catch (Exception e)
                 {
-                    try
-                    {
-                        await StartPlaybackInternal(videoURI, drmList, streamingProtocol).ConfigureAwait(false);
-                        promise.Resolve(Player.State.ToString());
-                    }
-                    catch (Exception e)
-                    {
-                        promise.Reject(e.Message, e);
-                    }
+                    promise.Reject(e.Message, e);
                 }
             }
 
