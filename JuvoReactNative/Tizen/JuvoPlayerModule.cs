@@ -28,9 +28,9 @@ using ILogger = JuvoLogger.ILogger;
 using ElmSharp;
 using ReactNative.Modules.Core;
 using Newtonsoft.Json.Linq;
+using PlayerService;
 using Tizen.Applications;
 using UI.Common;
-using static PlayerService.LogToolBox;
 
 namespace JuvoReactNative
 {
@@ -72,15 +72,11 @@ namespace JuvoReactNative
 
         public override string Name => "JuvoPlayer";
 
-        private void SendEvent(string eventName, JObject parameters)
-        {
+        private void SendEvent(string eventName, JObject parameters) =>
             Context.GetJavaScriptModule<RCTDeviceEventEmitter>().emit(eventName, parameters);
-        }
 
         public override void Initialize()
         {
-            Logger.LogEnter();
-
             Context.AddLifecycleEventListener(this);
             _keyDown = new EcoreEvent<EcoreKeyEventArgs>(EcoreEventType.KeyDown, EcoreKeyEventArgs.Create);
             _keyDown.On += (s, e) =>
@@ -100,43 +96,35 @@ namespace JuvoReactNative
                 param.Add("KeyCode", e.KeyCode);
                 SendEvent("onTVKeyUp", param);
             };
-
-            Logger.LogExit();
         }
 
         private void ResumeTimedDataUpdate()
         {
-            Logger.LogEnter();
-
-            _playbackTimer.Change(TimeSpan.Zero, TimedDataUpdateInterval); //resume update
-
-            Logger.LogExit();
+            using (LogScope.Create())
+            {
+                _playbackTimer.Change(TimeSpan.Zero, TimedDataUpdateInterval); //resume update
+            }
         }
 
         private void SuspendTimedDataUpdate()
         {
-            Logger.LogEnter();
-
-            _playbackTimer.Change(Timeout.Infinite, Timeout.Infinite); //suspend update
-            UpdateTimedData(); // Push out current (last known) timed data
-
-            Logger.LogExit();
+            using (LogScope.Create())
+            {
+                _playbackTimer.Change(Timeout.Infinite, Timeout.Infinite); //suspend update
+                UpdateTimedData(); // Push out current (last known) timed data
+            }
         }
 
         private void DisposePlayerSubscribers()
         {
-            Logger.LogEnter();
-
             _playbackErrorsSub.Dispose();
             _bufferingProgressSub.Dispose();
             _eosSub.Dispose();
-
-            Logger.LogExit();
         }
 
         public void OnDestroy()
         {
-            Logger.Info("Destroying JuvoPlayerModule...");
+            Logger.Info();
             DisposePlayerSubscribers();
             _seekCompletedSub.Dispose();
             _deepLinkSub.Dispose();
@@ -144,15 +132,18 @@ namespace JuvoReactNative
             _playbackTimer = null;
             Player.Dispose();
             Player = null;
+            Logger.Info("JuvoPlayerModule disposed");
         }
 
         public void OnResume()
         {
             bool havePlayer = Player != null;
-            Logger.LogEnter($"Have player: {havePlayer}");
 
-            if (havePlayer)
+            using (LogScope.Create($"Have player: {havePlayer}"))
             {
+                if (!havePlayer)
+                    return;
+
                 Context.RunOnNativeModulesQueueThread(async () =>
                 {
                     try
@@ -166,17 +157,17 @@ namespace JuvoReactNative
                     }
                 });
             }
-
-            Logger.LogExit();
         }
 
         public void OnSuspend()
         {
             bool havePlayer = Player != null;
-            Logger.LogEnter($"Have player: {havePlayer}");
 
-            if (havePlayer)
+            using (LogScope.Create($"Have player: {havePlayer}"))
             {
+                if (!havePlayer)
+                    return;
+
                 Context.RunOnNativeModulesQueueThread(async () =>
                 {
                     _seekLogic.Reset();
@@ -184,15 +175,13 @@ namespace JuvoReactNative
                     await Player.Suspend();
                 });
             }
-
-            Logger.LogExit();
         }
 
         private void UpdateBufferingProgress(int percent)
         {
             //Propagate the bufffering progress event to JavaScript module
             var param = new JObject();
-            param.Add("Percent", (int)percent);
+            param.Add("Percent", percent);
             SendEvent("onUpdateBufferingProgress", param);
         }
 
@@ -208,8 +197,6 @@ namespace JuvoReactNative
 
         private void InitialisePlayback()
         {
-            Logger.LogEnter();
-
             _playbackTimer = new Timer(UpdateTimedData, default, Timeout.Infinite, Timeout.Infinite);
             _seekCompletedSub = _seekLogic.SeekCompleted().Subscribe(_ => SendEvent("onSeekCompleted", new JObject()));
 
@@ -225,8 +212,6 @@ namespace JuvoReactNative
                     param.Add("Message", message);
                     SendEvent("onPlaybackError", param);
                 });
-
-            Logger.LogExit();
         }
 
         //////////////////JS methods//////////////////
@@ -260,15 +245,12 @@ namespace JuvoReactNative
                 return _allStreamsDescriptions[streamIndex];
             }
 
-
-            Logger.LogEnter();
-
             try
             {
+                var streams =await GetStreamsDescriptionInternal(streamTypeIndex, (StreamType) streamTypeIndex)
+                    .ConfigureAwait(false);
                 var param = new JObject();
-                param.Add("Description", Newtonsoft.Json.JsonConvert.SerializeObject(
-                    await GetStreamsDescriptionInternal(streamTypeIndex, (StreamType)streamTypeIndex)
-                        .ConfigureAwait(false)));
+                param.Add("Description", Newtonsoft.Json.JsonConvert.SerializeObject(streams));
                 param.Add("StreamTypeIndex", streamTypeIndex);
                 promise.Resolve(param);
             }
@@ -276,8 +258,6 @@ namespace JuvoReactNative
             {
                 promise.Reject(e.Message, e);
             }
-
-            Logger.LogExit();
         }
 
         [ReactMethod]
@@ -287,8 +267,6 @@ namespace JuvoReactNative
             {
                 bool haveStreamData = _allStreamsDescriptions[streamTypeIndex] != null && selectedIndex != -1;
                 StreamType streamType = (StreamType)streamIndex;
-
-                Logger.Info($"{streamType} Have data: {haveStreamData}");
 
                 if (haveStreamData)
                 {
@@ -301,8 +279,6 @@ namespace JuvoReactNative
                 return Player.State;
             }
 
-            Logger.LogEnter();
-
             try
             {
                 var playerState = await SetStreamInternal(selectionIndex, streamTypeIndex).ConfigureAwait(false);
@@ -312,8 +288,6 @@ namespace JuvoReactNative
             {
                 promise.Reject(e.Message, e);
             }
-
-            Logger.LogExit();
         }
 
         [ReactMethod]
@@ -341,8 +315,6 @@ namespace JuvoReactNative
                 ResumeTimedDataUpdate();
             }
 
-            Logger.LogEnter();
-
             if (string.IsNullOrWhiteSpace(videoURI))
             {
                 promise.Reject("empty URI", new ArgumentException());
@@ -367,8 +339,6 @@ namespace JuvoReactNative
                     promise.Reject(e.Message, e);
                 }
             }
-
-            Logger.LogExit();
         }
 
         [ReactMethod]
@@ -410,8 +380,6 @@ namespace JuvoReactNative
                 return Player.State;
             }
 
-            Logger.LogEnter();
-
             try
             {
                 var playerState = await PauseResumePlaybackInternal().ConfigureAwait(false);
@@ -421,8 +389,6 @@ namespace JuvoReactNative
             {
                 promise.Reject(e.Message, e);
             }
-
-            Logger.LogExit();
         }
 
         [ReactMethod]
@@ -447,10 +413,7 @@ namespace JuvoReactNative
         [ReactMethod]
         public void ExitApp()
         {
-            _mainSynchronizationContext.Post(_ =>
-            {
-                Application.Current.Exit();
-            }, null);
+            _mainSynchronizationContext.Post(_=>Application.Current.Exit(), null);
         }
     }
 }

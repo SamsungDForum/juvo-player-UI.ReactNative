@@ -129,12 +129,8 @@ namespace PlayerService
                 }
             }
 
-            Logger.LogEnter();
-
             var job = await _playerThread.ThreadJob(TerminateJob).ConfigureAwait(false);
             await job.ConfigureAwait(false);
-
-            Logger.LogExit();
         }
 
         private void OnEvent(IEvent ev)
@@ -158,15 +154,12 @@ namespace PlayerService
 
         public void Dispose()
         {
-            Logger.LogEnter();
-
-            WaitHandle.WaitAll(new[] { ((IAsyncResult)TerminatePlayer()).AsyncWaitHandle });
-            _playerThread.Join();
-
-            Logger.LogExit();
+            using (LogScope.Create())
+            {
+                WaitHandle.WaitAll(new[] { ((IAsyncResult)TerminatePlayer()).AsyncWaitHandle });
+                _playerThread.Join();
+            }
         }
-
-       
 
         public async Task Pause()
         {
@@ -176,15 +169,11 @@ namespace PlayerService
                 Logger.Info(_player.State.ToString());
             }
 
-            Logger.LogEnter();
-
             var job = await _playerThread
                 .ThreadJob(() => PauseJob().ReportException(_errorSubject, _pauseFailMessage))
                 .ConfigureAwait(false);
 
             await job.ConfigureAwait(false);
-
-            Logger.LogExit();
         }
 
         public async Task SeekTo(TimeSpan to)
@@ -195,15 +184,11 @@ namespace PlayerService
                 Logger.Info($"Seeked to: {seekTo}");
             }
 
-            Logger.LogEnter();
-
             var job = await _playerThread
                 .ThreadJob(() => SeekJob(to).ReportException(_errorSubject, _seekFailMessage))
                 .ConfigureAwait(false);
 
             await job.ConfigureAwait(false);
-
-            Logger.LogExit();
         }
 
         public async Task ChangeActiveStream(StreamDescription streamDescription)
@@ -232,15 +217,11 @@ namespace PlayerService
                 await _player.SetStreamGroups(newGroups, newSelectors);
             }
 
-            Logger.LogEnter();
-
             var job = await _playerThread
                 .ThreadJob(() => ChangeStreamJob(streamDescription).ReportException(_errorSubject, _changeStreamFailMessage))
                 .ConfigureAwait(false);
 
             await job.ConfigureAwait(false);
-
-            Logger.LogExit();
         }
 
         public void DeactivateStream(StreamType streamType)
@@ -252,27 +233,22 @@ namespace PlayerService
         {
             async Task<List<StreamDescription>> GetStreamsJob(StreamType stream)
             {
-                Logger.Info($"{stream}");
-
                 var description = _player
                     .GetStreamGroups()
                     .GetStreamDescriptionsFromStreamType(stream)
                     .ToList();
 
-                Logger.LogExit($"{stream} {description.Count} entries");
+                Logger.Info($"{stream} {description.Count} entries");
 
                 return description;
             }
-
-            Logger.LogEnter();
 
             var job = await _playerThread
                 .ThreadJob(() => GetStreamsJob(streamType).ReportException(_errorSubject))
                 .ConfigureAwait(false);
 
             var streamList = await job.ConfigureAwait(false) ?? new List<StreamDescription>();
-            
-            Logger.LogExit();
+
             return streamList;
         }
 
@@ -303,8 +279,6 @@ namespace PlayerService
                 }
             }
 
-            Logger.LogEnter();
-
             if (!clip.Type.Equals("dash", StringComparison.InvariantCultureIgnoreCase))
             {
                 _errorSubject.OnNext($"Unsupported protocol: {clip.Type}");
@@ -317,8 +291,6 @@ namespace PlayerService
 
                 await job.ConfigureAwait(false);
             }
-
-            Logger.LogExit();
         }
 
         public async Task Start()
@@ -329,15 +301,11 @@ namespace PlayerService
                 Logger.Info(_player.State.ToString());
             }
 
-            Logger.LogEnter();
-
             var job = await _playerThread
                 .ThreadJob(() => StartJob().ReportException(_errorSubject, _startFailMessage))
                 .ConfigureAwait(false);
 
             await job.ConfigureAwait(false);
-
-            Logger.LogExit();
         }
 
         public async Task Suspend()
@@ -358,16 +326,11 @@ namespace PlayerService
                 }
 
                 _player = null;
-
                 Logger.Info($"Suspend position: {_suspendTimeIndex}");
             }
 
-            Logger.LogEnter();
-
             var job = await _playerThread.ThreadJob(SuspendJob).ConfigureAwait(false);
             await job.ConfigureAwait(false);
-
-            Logger.LogExit();
         }
 
         public async Task Resume()
@@ -395,11 +358,8 @@ namespace PlayerService
                 }
 
                 Logger.Info($"Resumed position/state: {_suspendTimeIndex.Value}/{_player.State}");
-
                 return State;
             }
-
-            Logger.LogEnter();
 
             if (!_suspendTimeIndex.HasValue)
                 return;
@@ -412,8 +372,6 @@ namespace PlayerService
             // Suspend/Resume calls are not routed through JS. If playing state is not reached, report an error.
             if (resumeState != PlayerState.Playing)
                 _errorSubject.OnNext($"Resume failed. State {resumeState}");
-
-            Logger.LogExit();
         }
 
         public IObservable<string> PlaybackError() => _errorSubject.Publish().RefCount();

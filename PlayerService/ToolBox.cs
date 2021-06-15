@@ -15,6 +15,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -24,21 +25,31 @@ using UI.Common;
 
 namespace PlayerService
 {
-    public static class LogToolBox
+    public struct LogScope : IDisposable
     {
-        public static void LogEnter(
-            this ILogger logger,
-            string msg = "",
-            [CallerFilePath] string file = "",
-            [CallerMemberName] string method = "",
-            [CallerLineNumber] int line = 0) => logger.Debug("Enter() -> " + msg, file, method, line);
+        private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
 
-        public static void LogExit(
-            this ILogger logger,
+        private string _file;
+        private string _method;
+        private int _line;
+
+        public static LogScope Create(
             string msg = "",
             [CallerFilePath] string file = "",
             [CallerMemberName] string method = "",
-            [CallerLineNumber] int line = 0) => logger.Debug("Exit() <- " + msg, file, method, line);
+            [CallerLineNumber] int line = 0)
+        {
+            Logger.Debug($"Enter() -> {msg}", file, method, line);
+
+            return new LogScope
+            {
+                _file = file,
+                _method = method,
+                _line = line
+            };
+        }
+
+        public void Dispose() => Logger.Debug("Exit() <- ", _file, _method, _line);
     }
 
     internal static class PlayerServiceToolBox
