@@ -46,8 +46,8 @@ namespace PlayerService
         private ClipDefinition _currentClip;
         private TimeSpan? _suspendTimeIndex;
 
-        private const string _pauseFailMessage = "Ooops! Something went wrong when pausing.";
-        private const string _resumeFailMessage = "Bugger! Resume did not succeed.";
+        private const string _pauseFailMessage = "Something went wrong when pausing.";
+        private const string _resumeFailMessage = "Resume did not succeed.";
         private const string _changeStreamFailMessage = "Stream change failure caused by ***.";
         private const string _setSourceFailMessage = "Tried hard.. Failed harder to prepare playback.";
         private const string _startFailMessage = "Starting playback did not start nor said why.";
