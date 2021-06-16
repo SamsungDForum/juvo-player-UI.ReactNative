@@ -1,9 +1,27 @@
+/*!
+ * https://github.com/SamsungDForum/JuvoPlayer
+ * Copyright 2021, Samsung Electronics Co., Ltd
+ * Licensed under the MIT license
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
+ * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using ReactNative;
 using ReactNative.Bridge;
-using JuvoPlayer;
 using JuvoPlayer.Common;
 using JuvoLogger;
 using ILogger = JuvoLogger.ILogger;
@@ -14,45 +32,37 @@ using PlayerService;
 using Tizen.Applications;
 using UI.Common;
 
-
 namespace JuvoReactNative
 {
     public class JuvoPlayerModule : ReactContextNativeModuleBase, ILifecycleEventListener, ISeekLogicClient
     {
-        private Timer playbackTimer;
-        private SeekLogic seekLogic = null; // needs to be initialized in the constructor!
-        private ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
-        public readonly string Tag = "JuvoRN";
-        EcoreEvent<EcoreKeyEventArgs> _keyDown;
-        EcoreEvent<EcoreKeyEventArgs> _keyUp;
-        Window window = ReactProgram.RctWindow; //The main window of the application has to be transparent.
-        List<StreamDescription>[] allStreamsDescriptions = { null, null, null };
+        private Timer _playbackTimer;
+        private readonly SeekLogic _seekLogic = null; // needs to be initialized in the constructor!
+
+        private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
+
+        private EcoreEvent<EcoreKeyEventArgs> _keyDown;
+        private EcoreEvent<EcoreKeyEventArgs> _keyUp;
+
+        // assumes StreamType values are sequential [0..N]
+        private readonly List<StreamDescription>[] _allStreamsDescriptions = new List<StreamDescription>[Enum.GetValues(typeof(StreamType)).Length];
         public IPlayerService Player { get; private set; }
-        private IDisposable seekCompletedSub;
-        private IDisposable playerStateChangeSub;
-        private IDisposable playbackErrorsSub;
-        private IDisposable bufferingProgressSub;
-        private IDisposable deepLinkSub;
-        private IDeepLinkSender deepLinkSender;
-        private readonly SynchronizationContext mainSynchronizationContext;
+        private IDisposable _seekCompletedSub;
+        private IDisposable _playbackErrorsSub;
+        private IDisposable _bufferingProgressSub;
+        private IDisposable _deepLinkSub;
+        private IDisposable _eosSub;
+        private readonly IDeepLinkSender _deepLinkSender;
+        private readonly SynchronizationContext _mainSynchronizationContext;
+        private static readonly TimeSpan TimedDataUpdateInterval = TimeSpan.FromMilliseconds(100);
 
         public JuvoPlayerModule(ReactContext reactContext, IDeepLinkSender deepLinkSender,
             SynchronizationContext mainSynchronizationContext)
             : base(reactContext)
         {
-            seekLogic = new SeekLogic(this);
-            this.deepLinkSender = deepLinkSender;
-            this.mainSynchronizationContext = mainSynchronizationContext;
-            seekCompletedSub = seekLogic.SeekCompleted().Subscribe(message =>
-            {
-                var param = new JObject();
-                SendEvent("onSeekCompleted", param);
-            });
-
-            playbackTimer = new Timer(
-                            callback: new TimerCallback(UpdatePlayTime),
-                            state: seekLogic.CurrentPositionUI,
-                            Timeout.Infinite, Timeout.Infinite);
+            _seekLogic = new SeekLogic(this);
+            _deepLinkSender = deepLinkSender;
+            _mainSynchronizationContext = mainSynchronizationContext;
         }
 
         private void OnDeepLinkReceived(string url)
@@ -60,41 +70,11 @@ namespace JuvoReactNative
             SendEvent("handleDeepLink", new JObject { { "url", url } });
         }
 
-        private void InitializeJuvoPlayer()
-        {
-            Player = new PlayerServiceImpl();
-            Player.SetWindow(window);
-            playerStateChangeSub = Player.StateChanged()
-               .Subscribe(OnPlayerStateChanged, OnPlaybackCompleted);
-            playbackErrorsSub = Player.PlaybackError()
-                .Subscribe(message =>
-                {
-                    var param = new JObject();
-                    param.Add("Message", message);
-                    SendEvent("onPlaybackError", param);
-                });
-            bufferingProgressSub = Player.BufferingProgress()
-                .Subscribe(UpdateBufferingProgress);
+        public override string Name => "JuvoPlayer";
 
-            playbackTimer = new Timer(
-                callback: new TimerCallback(UpdatePlayTime),
-                state: seekLogic.CurrentPositionUI,
-                dueTime: Timeout.Infinite,
-                period: Timeout.Infinite);
+        private void SendEvent(string eventName, JObject parameters) =>
+            Context.GetJavaScriptModule<RCTDeviceEventEmitter>().emit(eventName, parameters);
 
-        }
-        public override string Name
-        {
-            get
-            {
-                return "JuvoPlayer";
-            }
-        }
-        private void SendEvent(string eventName, JObject parameters)
-        {
-            Context.GetJavaScriptModule<RCTDeviceEventEmitter>()
-                .emit(eventName, parameters);
-        }
         public override void Initialize()
         {
             Context.AddLifecycleEventListener(this);
@@ -117,246 +97,323 @@ namespace JuvoReactNative
                 SendEvent("onTVKeyUp", param);
             };
         }
-        private void OnPlayerStateChanged(PlayerState state)
+
+        private void ResumeTimedDataUpdate()
         {
-            Logger.Info($"{state}");
-            string value = "Idle";
-            int interval = 100;
-            switch (state)
+            using (LogScope.Create())
             {
-                case PlayerState.Ready:
-                    Player?.Start();
-                    playbackTimer?.Change(0, interval); //resume progress info update
-                    value = "Prepared";
-                    break;
-
-                case PlayerState.Playing:
-                    value = "Playing";
-                    break;
-                case PlayerState.Paused:
-                    value = "Paused";
-                    break;
-
-                // "Stop" clears active Player preventing dispatch of extra stop calls.
-                case PlayerState.Idle:
-                    playbackTimer?.Change(Timeout.Infinite, Timeout.Infinite); //suspend progress info update
-                    break;
+                _playbackTimer.Change(TimeSpan.Zero, TimedDataUpdateInterval); //resume update
             }
-
-            Logger.Info($"onPlayerStateChanged('{value}')");
-            var param = new JObject();
-            param.Add("State", value);
-            SendEvent("onPlayerStateChanged", param);
         }
 
-        private void OnPlaybackCompleted()
+        private void SuspendTimedDataUpdate()
         {
-            Logger.Info("");
-            var param = new JObject();
-            param.Add("State", "Completed");
-            SendEvent("onPlaybackCompleted", param);
+            using (LogScope.Create())
+            {
+                _playbackTimer.Change(Timeout.Infinite, Timeout.Infinite); //suspend update
+                UpdateTimedData(); // Push out current (last known) timed data
+            }
         }
+
         private void DisposePlayerSubscribers()
         {
-            Logger.Info("");
-            playerStateChangeSub?.Dispose();
-            playbackErrorsSub?.Dispose();
-            bufferingProgressSub?.Dispose();
+            _playbackErrorsSub.Dispose();
+            _bufferingProgressSub.Dispose();
+            _eosSub.Dispose();
         }
+
         public void OnDestroy()
         {
-            Logger?.Info("Destroying JuvoPlayerModule...");
+            Logger.Info();
             DisposePlayerSubscribers();
-            seekCompletedSub.Dispose();
-            deepLinkSub?.Dispose();
-            playbackTimer?.Dispose();
-            playbackTimer = null;
-            Player?.Dispose();
+            _seekCompletedSub.Dispose();
+            _deepLinkSub.Dispose();
+            _playbackTimer.Dispose();
+            _playbackTimer = null;
+            Player.Dispose();
             Player = null;
+            Logger.Info("JuvoPlayerModule disposed");
         }
+
         public void OnResume()
         {
-            Logger.Info("");
-            Player?.Resume();
+            bool havePlayer = Player != null;
+
+            using (LogScope.Create($"Have player: {havePlayer}"))
+            {
+                if (!havePlayer)
+                    return;
+
+                Context.RunOnNativeModulesQueueThread(async () =>
+                {
+                    try
+                    {
+                        await Player.Resume();
+                        ResumeTimedDataUpdate();
+                    }
+                    catch
+                    {
+                        // Ignore. Errors are reported by Resume().
+                    }
+                });
+            }
         }
+
         public void OnSuspend()
         {
-            Logger.Info("");
-            Player?.Suspend();
+            bool havePlayer = Player != null;
+
+            using (LogScope.Create($"Have player: {havePlayer}"))
+            {
+                if (!havePlayer)
+                    return;
+
+                Context.RunOnNativeModulesQueueThread(async () =>
+                {
+                    _seekLogic.Reset();
+                    SuspendTimedDataUpdate();
+                    await Player.Suspend();
+                });
+            }
         }
 
         private void UpdateBufferingProgress(int percent)
         {
             //Propagate the bufffering progress event to JavaScript module
             var param = new JObject();
-            param.Add("Percent", (int)percent);
+            param.Add("Percent", percent);
             SendEvent("onUpdateBufferingProgress", param);
         }
-        private void UpdatePlayTime(object timerState)
+
+        private void UpdateTimedData(object _ = default)
         {
-            string txt = "";
-            if (Player?.CurrentCueText != null)
-            {
-                txt = Player?.CurrentCueText;
-            }
+            var txt = Player?.CurrentCueText ?? string.Empty;
             var param = new JObject();
-            param.Add("Total", (int)seekLogic.Duration.TotalMilliseconds);
-            param.Add("Current", (int)seekLogic.CurrentPositionUI.TotalMilliseconds);
+            param.Add("Total", (int)_seekLogic.Duration.TotalMilliseconds);
+            param.Add("Current", (int)_seekLogic.CurrentPositionUI.TotalMilliseconds);
             param.Add("SubtiteText", txt);
             SendEvent("onUpdatePlayTime", param);
         }
-        private void Play(string videoURI, List<DrmDescription> drmDataList, string streamingProtocol)
-        {
-            try
-            {
-                if (videoURI == null) return;
-                if (Player?.State == PlayerState.Playing) return;
-                InitializeJuvoPlayer();
-                Player.SetSource(new ClipDefinition
-                {
-                    Type = streamingProtocol,
-                    Url = videoURI,
-                    Subtitles = new List<SubtitleInfo>(),
-                    DRMDatas = drmDataList
-                });
-            }
-            catch (Exception e)
-            {
-                Logger?.Error(Tag, e.Message);
-            }
-        }
 
-        public void OnError(Exception error)
+        private void InitialisePlayback()
         {
-            var param = new JObject();
-            param.Add("Message", error.Message);
-            SendEvent("onPlaybackError", param);
+            _playbackTimer = new Timer(UpdateTimedData, default, Timeout.Infinite, Timeout.Infinite);
+            _seekCompletedSub = _seekLogic.SeekCompleted().Subscribe(_ => SendEvent("onSeekCompleted", new JObject()));
+
+            Player = new PlayerService.PlayerService();
+            Player.SetWindow(ReactProgram.RctWindow);
+
+            _bufferingProgressSub = Player.BufferingProgress().Subscribe(UpdateBufferingProgress);
+            _eosSub = Player.EndOfStream().Subscribe(_ => SendEvent("onEndOfStream", new JObject()));
+            _playbackErrorsSub = Player.PlaybackError()
+                .Subscribe(message =>
+                {
+                    var param = new JObject();
+                    param.Add("Message", message);
+                    SendEvent("onPlaybackError", param);
+                });
         }
 
         //////////////////JS methods//////////////////
         [ReactMethod]
-        public void GetStreamsDescription(int StreamTypeIndex)
+        public async void GetStreamsDescription(int streamTypeIndex, IPromise promise)
         {
-            var index = (JuvoPlayer.Common.StreamType)StreamTypeIndex;
-            if (index == JuvoPlayer.Common.StreamType.Subtitle)
+            async Task<List<StreamDescription>> GetStreamsDescriptionInternal(int streamIndex, StreamType streamType)
             {
-                this.allStreamsDescriptions[StreamTypeIndex] = new List<StreamDescription>
-                {
-                    new StreamDescription
-                    {
-                        Default = true,
-                        Description = "off",
-                        Id = "0",
-                        StreamType = (StreamType)StreamTypeIndex
-                    }
-                };
-                this.allStreamsDescriptions[StreamTypeIndex].AddRange(
-                    Player.GetStreamsDescription((StreamType)StreamTypeIndex).GetAwaiter().GetResult());
-            }
-            else
-            {
-                this.allStreamsDescriptions[StreamTypeIndex] = 
-                    Player.GetStreamsDescription((StreamType)StreamTypeIndex).GetAwaiter().GetResult();
-            }
-            var param = new JObject();
-            param.Add("Description", Newtonsoft.Json.JsonConvert.SerializeObject(this.allStreamsDescriptions[StreamTypeIndex]));
-            param.Add("StreamTypeIndex", (int)StreamTypeIndex);
-            SendEvent("onGotStreamsDescription", param);
-        }
-        [ReactMethod]
-        public void SetStream(int SelectedIndex, int StreamTypeIndex)
-        {
-            if (this.allStreamsDescriptions[StreamTypeIndex] == null) return;
+                Logger.Info($"{streamType}");
 
-            if (SelectedIndex != -1)
-            {
-                var index = (JuvoPlayer.Common.StreamType)StreamTypeIndex;
-                if (index == JuvoPlayer.Common.StreamType.Subtitle)
+                if (streamType == StreamType.Subtitle)
                 {
-                    if (SelectedIndex == 0)
+                    _allStreamsDescriptions[streamIndex] = new List<StreamDescription>
                     {
-                        Player.DeactivateStream(StreamType.Subtitle);
-                        return;
-                    }
+                        new StreamDescription
+                        {
+                            Default = true,
+                            Description = "off",
+                            Id = "0",
+                            StreamType = streamType
+                        }
+                    };
+
+                    _allStreamsDescriptions[streamIndex].AddRange(await Player.GetStreamsDescription(streamType));
                 }
-                var stream = (StreamDescription)this.allStreamsDescriptions[StreamTypeIndex][SelectedIndex];
-                Player.ChangeActiveStream(stream);
+                else
+                {
+                    _allStreamsDescriptions[streamIndex] = await Player.GetStreamsDescription(streamType);
+                }
+
+                return _allStreamsDescriptions[streamIndex];
+            }
+
+            try
+            {
+                var streams =await GetStreamsDescriptionInternal(streamTypeIndex, (StreamType) streamTypeIndex)
+                    .ConfigureAwait(false);
+                var param = new JObject();
+                param.Add("Description", Newtonsoft.Json.JsonConvert.SerializeObject(streams));
+                param.Add("StreamTypeIndex", streamTypeIndex);
+                promise.Resolve(param);
+            }
+            catch (Exception e)
+            {
+                promise.Reject(e.Message, e);
             }
         }
+
+        [ReactMethod]
+        public async void SetStream(int selectionIndex, int streamTypeIndex, IPromise promise)
+        {
+            async Task<PlayerState> SetStreamInternal(int selectedIndex, int streamIndex)
+            {
+                bool haveStreamData = _allStreamsDescriptions[streamTypeIndex] != null && selectedIndex != -1;
+                StreamType streamType = (StreamType)streamIndex;
+
+                if (haveStreamData)
+                {
+                    if (streamType == StreamType.Subtitle && selectedIndex == 0)
+                        Player.DeactivateStream(StreamType.Subtitle);
+                    else
+                        await Player.ChangeActiveStream(this._allStreamsDescriptions[streamIndex][selectedIndex]);
+                }
+
+                return Player.State;
+            }
+
+            try
+            {
+                var playerState = await SetStreamInternal(selectionIndex, streamTypeIndex).ConfigureAwait(false);
+                promise.Resolve(playerState.ToString());
+            }
+            catch (Exception e)
+            {
+                promise.Reject(e.Message, e);
+            }
+        }
+
         [ReactMethod]
         public void Log(string message)
         {
             Logger?.Info(message);
         }
-        [ReactMethod]
-        public void StartPlayback(string videoURI, string drmDatasJSON, string streamingProtocol)
-        {
-            Logger.Info("");
 
-            try
+        [ReactMethod]
+        public async void StartPlayback(string videoURI, string drmDatasJSON, string streamingProtocol, IPromise promise)
+        {
+            async Task StartPlaybackInternal(string uri, List<DrmDescription> drm, string protocol)
             {
-                var drmDataList = (drmDatasJSON != null) ? JSONFileReader.DeserializeJsonText<List<DrmDescription>>(drmDatasJSON) : new List<DrmDescription>();
-                Play(videoURI, drmDataList, streamingProtocol);
+                InitialisePlayback();
+
+                await Player.SetSource(new ClipDefinition
+                {
+                    Type = protocol,
+                    Url = uri,
+                    Subtitles = new List<SubtitleInfo>(),
+                    DRMDatas = drm
+                });
+
+                await Player.Start();
+                ResumeTimedDataUpdate();
             }
-            catch (Exception e)
+
+            if (string.IsNullOrWhiteSpace(videoURI))
             {
-                Logger?.Error(Tag, "StartPlayback failed... " + e.Message);
+                promise.Reject("empty URI", new ArgumentException());
             }
-            finally
+            else if (string.IsNullOrWhiteSpace(streamingProtocol))
             {
-                seekLogic.Reset();
+                promise.Reject("empty protocol", new ArgumentException());
+            }
+            else
+            {
+                try
+                {
+                    var drmList = string.IsNullOrWhiteSpace(drmDatasJSON)
+                        ? Enumerable.Empty<DrmDescription>().ToList()
+                        : JSONFileReader.DeserializeJsonText<List<DrmDescription>>(drmDatasJSON);
+
+                    await StartPlaybackInternal(videoURI, drmList, streamingProtocol).ConfigureAwait(false);
+                    promise.Resolve(Player.State.ToString());
+                }
+                catch (Exception e)
+                {
+                    promise.Reject(e.Message, e);
+                }
             }
         }
+
         [ReactMethod]
         public void StopPlayback()
         {
             if (Player == null)
                 return;
 
-            Logger.Info("");
+            Logger.Info();
 
             OnDestroy();
         }
-        [ReactMethod]
-        public void PauseResumePlayback()
-        {
-            if (Player == null)
-                return;
 
-            switch (Player.State)
+        [ReactMethod]
+        public async void PauseResumePlayback(IPromise promise)
+        {
+            async Task<PlayerState> PauseResumePlaybackInternal()
             {
-                case JuvoPlayer.Common.PlayerState.Playing:
-                    Player.Pause();
-                    break;
-                case JuvoPlayer.Common.PlayerState.Paused:
-                    Player.Start();
-                    break;
+                Task pauseResumeTask;
+
+                switch (Player.State)
+                {
+                    case PlayerState.Playing:
+                        pauseResumeTask = Player.Pause();
+                        SuspendTimedDataUpdate();
+                        break;
+
+                    case PlayerState.Paused:
+                        pauseResumeTask = Player.Start();
+                        ResumeTimedDataUpdate();
+                        break;
+
+                    default:
+                        pauseResumeTask = Task.CompletedTask;
+                        break;
+                }
+
+                await pauseResumeTask;
+                return Player.State;
+            }
+
+            try
+            {
+                var playerState = await PauseResumePlaybackInternal().ConfigureAwait(false);
+                promise.Resolve(playerState.ToString());
+            }
+            catch (Exception e)
+            {
+                promise.Reject(e.Message, e);
             }
         }
+
         [ReactMethod]
         public void Forward()
         {
-            seekLogic.SeekForward();
+            _seekLogic.SeekForward();
         }
+
         [ReactMethod]
         public void Rewind()
         {
-            seekLogic.SeekBackward();
+            _seekLogic.SeekBackward();
         }
+
         [ReactMethod]
         public void AttachDeepLinkListener()
         {
-            if (deepLinkSub == null)
-                deepLinkSub = deepLinkSender.DeepLinkReceived().Subscribe(OnDeepLinkReceived);
+            if (_deepLinkSub == null)
+                _deepLinkSub = _deepLinkSender.DeepLinkReceived().Subscribe(OnDeepLinkReceived);
         }
 
         [ReactMethod]
         public void ExitApp()
         {
-            mainSynchronizationContext.Post(_ =>
-            {
-                Application.Current.Exit();
-            }, null);
+            _mainSynchronizationContext.Post(_=>Application.Current.Exit(), null);
         }
     }
 }

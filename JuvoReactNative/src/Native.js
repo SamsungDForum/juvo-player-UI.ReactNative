@@ -2,10 +2,10 @@ const Native = {
   JuvoPlayer: {
     Common: {
       StreamType: {
-        Audio: 0,
-        Video: 1,
-        Subtitle: 2,
-        Teletext: 3,
+        Unknown: 0,
+        Audio: 1,
+        Video: 2,
+        Subtitle: 3,
         Count: 4
       }
     }
