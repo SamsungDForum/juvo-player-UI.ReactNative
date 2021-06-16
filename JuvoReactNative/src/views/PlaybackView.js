@@ -199,7 +199,6 @@ export default class PlaybackView extends React.Component {
         this.operationInProgress = true;
         this.resetPlaybackTime();
         this.requestInfoShow();
-        this.redraw();
         break;
 
       case 'None':
@@ -335,7 +334,6 @@ export default class PlaybackView extends React.Component {
         } else {
           this.JuvoPlayer.Log('onTVKeyDown: '+pressed.KeyName+'. requestInfoHide()->redraw()');
           this.requestInfoHide();
-          this.redraw();
         }
         break;
 
