@@ -33,10 +33,6 @@ export default class ContentScroll extends React.Component {
     this.selectedIndex = newIndex;
   }
 
-  shouldComponentUpdate(nextProps, nextState) {
-    return false;
-  }
-
   componentWillMount() {
     DeviceEventEmitter.addListener('ContentScroll/onTVKeyDown', this.onTVKeyDown);
   }
