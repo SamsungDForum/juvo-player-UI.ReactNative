@@ -62,9 +62,9 @@ export default class PlaybackSettingsView extends React.Component {
     }
   }
 
-  pickerChange(itemIndex, settingName) {
+  async pickerChange(itemIndex, settingName) {
     //Apply the playback setttings to the playback
-    this.JuvoPlayer.SetStream(itemIndex, Native.JuvoPlayer.Common.StreamType[settingName]);
+    await this.JuvoPlayer.SetStream(itemIndex, Native.JuvoPlayer.Common.StreamType[settingName]);
   }
 
   render() {
