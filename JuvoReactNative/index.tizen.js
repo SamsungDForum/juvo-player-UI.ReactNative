@@ -66,7 +66,6 @@ export default class JuvoReactNative extends Component {
     this.handleSelectedIndexChange = this.handleSelectedIndexChange.bind(this);
     this.handleDeepLink = this.handleDeepLink.bind(this);
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
-    this.onTVKeyUp = this.onTVKeyUp.bind(this);
     this.currentView = this.currentView.bind(this);
     this.finishLoading = this.finishLoading.bind(this);
     this.renderProgress = this.renderProgress.bind(this);
@@ -79,13 +78,8 @@ export default class JuvoReactNative extends Component {
     DeviceEventEmitter.emit(`${this.currentView()}/onTVKeyDown`, pressed);
   }
 
-  onTVKeyUp(pressed) {
-    DeviceEventEmitter.emit(`${this.currentView()}/onTVKeyUp`, pressed);
-  }
-
   componentWillMount() {
     this.JuvoEventEmitter.addListener("onTVKeyDown", this.onTVKeyDown);
-    this.JuvoEventEmitter.addListener("onTVKeyUp", this.onTVKeyUp);
     this.JuvoEventEmitter.addListener("handleDeepLink", this.handleDeepLink);
     this.JuvoPlayer.AttachDeepLinkListener();
   }

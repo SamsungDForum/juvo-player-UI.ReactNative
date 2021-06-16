@@ -42,7 +42,6 @@ namespace JuvoReactNative
         private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
 
         private EcoreEvent<EcoreKeyEventArgs> _keyDown;
-        private EcoreEvent<EcoreKeyEventArgs> _keyUp;
 
         // assumes StreamType values are sequential [0..N]
         private readonly List<StreamDescription>[] _allStreamsDescriptions = new List<StreamDescription>[Enum.GetValues(typeof(StreamType)).Length];
@@ -86,15 +85,6 @@ namespace JuvoReactNative
                 param.Add("KeyName", e.KeyName);
                 param.Add("KeyCode", e.KeyCode);
                 SendEvent("onTVKeyDown", param);
-            };
-            _keyUp = new EcoreEvent<EcoreKeyEventArgs>(EcoreEventType.KeyUp, EcoreKeyEventArgs.Create);
-            _keyUp.On += (s, e) =>
-            {
-                //Propagate the key press event to JavaScript module
-                var param = new JObject();
-                param.Add("KeyName", e.KeyName);
-                param.Add("KeyCode", e.KeyCode);
-                SendEvent("onTVKeyUp", param);
             };
         }
 
@@ -247,7 +237,7 @@ namespace JuvoReactNative
 
             try
             {
-                var streams =await GetStreamsDescriptionInternal(streamTypeIndex, (StreamType) streamTypeIndex)
+                var streams = await GetStreamsDescriptionInternal(streamTypeIndex, (StreamType)streamTypeIndex)
                     .ConfigureAwait(false);
                 var param = new JObject();
                 param.Add("Description", Newtonsoft.Json.JsonConvert.SerializeObject(streams));
@@ -413,7 +403,7 @@ namespace JuvoReactNative
         [ReactMethod]
         public void ExitApp()
         {
-            _mainSynchronizationContext.Post(_=>Application.Current.Exit(), null);
+            _mainSynchronizationContext.Post(_ => Application.Current.Exit(), null);
         }
     }
 }
