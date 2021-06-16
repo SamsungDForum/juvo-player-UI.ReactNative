@@ -1,6 +1,6 @@
 'use strict';
 import React, { Component } from 'react';
-import { View, NativeModules, NativeEventEmitter, Dimensions, StyleSheet, DeviceEventEmitter } from 'react-native';
+import { View, NativeModules, Dimensions, StyleSheet, DeviceEventEmitter } from 'react-native';
 
 import HideableView from './HideableView';
 import ContentPicture from './ContentPicture';
@@ -16,14 +16,12 @@ export default class ContentCatalog extends Component {
   constructor(props) {
     super(props);
     this.bigPictureVisible = this.props.visibility;
-    this.keysListenningOff = false;
     this.toggleVisibility = this.toggleVisibility.bind(this);
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
     this.handleSelectedIndexChange = this.handleSelectedIndexChange.bind(this);
     this.handleBigPicLoadStart = this.handleBigPicLoadStart.bind(this);
     this.handleBigPicLoadEnd = this.handleBigPicLoadEnd.bind(this);
     this.JuvoPlayer = NativeModules.JuvoPlayer;
-    this.JuvoEventEmitter = new NativeEventEmitter(this.JuvoPlayer);
     this.pendingLoads = 0;
     this.onIndexChangeDebounceCompleted = this.onIndexChangeDebounceCompleted.bind(this);
     this.debounceIndexChange = debounceCompleted;
@@ -48,12 +46,6 @@ export default class ContentCatalog extends Component {
     //pressed.KeyName
     //pressed.KeyCode
     
-    if (this.keysListenningOff) 
-    {
-      this.JuvoPlayer.Log('ContentCatalog.onTVKeyDown(): '+pressed.KeyName+' ignored');
-      return;
-    }
-
     switch (pressed.KeyName) {
       case 'XF86AudioStop':
       case 'Return':
@@ -70,10 +62,6 @@ export default class ContentCatalog extends Component {
       case 'XF86Back':
         this.JuvoPlayer.ExitApp();
         break;
-
-      default:
-        DeviceEventEmitter.emit('ContentScroll/onTVKeyDown', pressed);
-        return;
     }
   }
  
@@ -128,10 +116,7 @@ export default class ContentCatalog extends Component {
   render() {
     const index = this.selectedClipIndex;
     const path = ResourceLoader.tilePaths[index];
-
     const overlay = ResourceLoader.contentDescriptionBackground;
-
-    this.keysListenningOff = !this.props.visibility;
     const showBigPicture = this.bigPictureVisible;
     
     const onLoadStart = this.handleBigPicLoadStart;
@@ -154,7 +139,6 @@ export default class ContentCatalog extends Component {
           <ContentScroll
             onSelectedIndexChange={indexChange}
             contentURIs={ResourceLoader.tilePaths}
-            keysListenningOff={this.keysListenningOff}
             deepLinkIndex={this.props.deepLinkIndex}
           />
         </View>

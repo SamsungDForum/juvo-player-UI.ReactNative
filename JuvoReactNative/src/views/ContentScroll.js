@@ -34,11 +34,11 @@ export default class ContentScroll extends React.Component {
   }
 
   componentWillMount() {
-    DeviceEventEmitter.addListener('ContentScroll/onTVKeyDown', this.onTVKeyDown);
+    DeviceEventEmitter.addListener('ContentCatalog/onTVKeyDown', this.onTVKeyDown);
   }
   
   componentWillUnmount() {
-    DeviceEventEmitter.removeListener('ContentScroll/onTVKeyDown', this.onTVKeyDown);
+    DeviceEventEmitter.removeListener('ContentCatalog/onTVKeyDown', this.onTVKeyDown);
   }
 
   componentWillReceiveProps(nextProps) {
