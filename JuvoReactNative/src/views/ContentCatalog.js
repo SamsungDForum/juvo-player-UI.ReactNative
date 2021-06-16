@@ -1,6 +1,6 @@
 'use strict';
 import React, { Component } from 'react';
-import { View, NativeModules, Dimensions, StyleSheet, DeviceEventEmitter } from 'react-native';
+import { View, NativeModules, NativeEventEmitter, Dimensions, StyleSheet, DeviceEventEmitter } from 'react-native';
 
 import HideableView from './HideableView';
 import ContentPicture from './ContentPicture';
@@ -22,6 +22,7 @@ export default class ContentCatalog extends Component {
     this.handleBigPicLoadStart = this.handleBigPicLoadStart.bind(this);
     this.handleBigPicLoadEnd = this.handleBigPicLoadEnd.bind(this);
     this.JuvoPlayer = NativeModules.JuvoPlayer;
+    this.JuvoEventEmitter = new NativeEventEmitter(this.JuvoPlayer);
     this.pendingLoads = 0;
     this.onIndexChangeDebounceCompleted = this.onIndexChangeDebounceCompleted.bind(this);
     this.debounceIndexChange = debounceCompleted;
