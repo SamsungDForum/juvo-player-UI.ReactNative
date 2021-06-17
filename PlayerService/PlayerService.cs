@@ -196,7 +196,6 @@ namespace PlayerService
             async Task ChangeStreamJob(StreamDescription targetStream)
             {
                 var selected = _player.GetStreamGroups()
-                    .DumpStreamGroups()
                     .SelectStream(targetStream);
 
                 if (selected != default)
