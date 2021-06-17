@@ -56,56 +56,18 @@ namespace PlayerService
     {
         public static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
 
-        public static StreamDescription ToStreamDescription(this Format format, StreamType stream)
-        {
-            string description;
-
-            switch (stream)
+        public static StreamDescription ToStreamDescription(this Format format, StreamType stream) =>
+            new StreamDescription
             {
-                case StreamType.Video:
-                    description = $"{format.Width}x{format.Height} {format.Label}";
-                    if (string.IsNullOrWhiteSpace(description))
-                        description = "Video " + format.Id;
+                Default = format.RoleFlags.HasFlag(RoleFlags.Main),
+                Description = string.IsNullOrWhiteSpace(format.Label)
+                    ? format.Id
+                    : format.Label,
+                Id = format.Id,
+                StreamType = stream
+            };
 
-                    return new StreamDescription
-                    {
-                        Default = format.RoleFlags.HasFlag(RoleFlags.Main),
-                        Description = description,
-                        Id = format.Id,
-                        StreamType = stream
-                    };
-
-                case StreamType.Audio:
-                    description = $"{format.Language} {format.ChannelCount} {format.Label}";
-                    if (string.IsNullOrWhiteSpace(description))
-                        description = "Audio " + format.Id;
-
-                    return new StreamDescription
-                    {
-                        Default = format.RoleFlags.HasFlag(RoleFlags.Main),
-                        Description = description,
-                        Id = format.Id,
-                        StreamType = stream
-                    };
-
-                default:
-                    description = format.Label;
-                    if (string.IsNullOrWhiteSpace(description))
-                        description = $"{stream} {format.Id}";
-
-                    return new StreamDescription
-                    {
-                        Default = format.RoleFlags.HasFlag(RoleFlags.Main),
-                        Description = description,
-                        Id = format.Id,
-                        StreamType = stream
-                    };
-
-            }
-        }
-
-        public static IEnumerable<StreamDescription> GetStreamDescriptionsFromStreamType(this StreamGroup[] groups,
-            StreamType type)
+        public static IEnumerable<StreamDescription> GetStreamDescriptionsFromStreamType(this StreamGroup[] groups, StreamType type)
         {
             ContentType content = type.ToContentType();
             return groups
@@ -114,17 +76,25 @@ namespace PlayerService
                 .Select(format => format.Format.ToStreamDescription(type));
         }
 
-        public static (StreamGroup group, IStreamSelector selector) SelectStream(this StreamGroup[] groups, ContentType type, string id)
+        public static (StreamGroup group, IStreamSelector selector) SelectStream(this StreamGroup[] groups, StreamDescription targetStream)
         {
-            StreamGroup selectedContent = groups.FirstOrDefault(group => group.ContentType == type);
+            ContentType type = targetStream.StreamType.ToContentType();
 
-            if (selectedContent?.Streams.Count != selectedContent?.Streams.Select(stream => stream.Format.Id).Distinct().Count())
-                Logger.Warn("Stream Format IDs are not unique. Stream selection may not be accurate");
+            var prospectGroups = groups
+                .Where(group => group.ContentType == type)
+                .Select(group => group);
 
-            int index = selectedContent?.Streams.IndexOf(
-                selectedContent.Streams.FirstOrDefault(stream => stream.Format.Id == id)) ?? -1;
+            foreach (var prospect in prospectGroups)
+            {
+                var prospectStreams = prospect.Streams.Count;
+                for (var streamIndex = 0; streamIndex < prospectStreams; streamIndex++)
+                {
+                    if (prospect.Streams[streamIndex].Format.Id.Equals(targetStream.Id))
+                        return (prospect, new FixedStreamSelector(streamIndex));
+                }
+            }
 
-            return (selectedContent, index == -1 ? null : new FixedStreamSelector(index));
+            return default;
         }
 
         public static (StreamGroup[], IStreamSelector[]) UpdateSelection(
@@ -141,6 +111,43 @@ namespace PlayerService
             }
 
             return currentSelection;
+        }
+
+        public static StreamGroup[] DumpStreamGroups(this StreamGroup[] groups)
+        {
+            if (Logger.IsLevelEnabled(LogLevel.Debug))
+            {
+                foreach (var group in groups)
+                {
+                    Logger.Debug($"Group: {group.ContentType} Entries: {group.Streams.Count}");
+                    foreach (var streamInfo in group.Streams)
+                        Logger.Debug($"\tID: {streamInfo.Format.Id} / {streamInfo.Format.ToStreamDescription(group.ContentType.ToStreamType())}");
+                }
+            }
+
+            return groups;
+        }
+
+        public static IEnumerable<StreamDescription> DumpStreamDescriptions(this IEnumerable<StreamDescription> descriptions)
+        {
+            if (Logger.IsLevelEnabled(LogLevel.Debug))
+            {
+                foreach (var description in descriptions)
+                    Logger.Debug($"Stream: {description}");
+            }
+
+            return descriptions;
+        }
+
+        public static IEnumerable<StreamInfo> DumpStreamInfo(this IEnumerable<StreamInfo> streamInfos, StreamType streamType)
+        {
+            if (Logger.IsLevelEnabled(LogLevel.Debug))
+            {
+                foreach (var info in streamInfos)
+                    Logger.Debug($"StreamInfo: {info.Format.Id} / {info.Format.ToStreamDescription(streamType)}");
+            }
+
+            return streamInfos;
         }
     }
 }

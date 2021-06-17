@@ -220,7 +220,7 @@ namespace JuvoReactNative
                         {
                             Default = true,
                             Description = "off",
-                            Id = "0",
+                            Id = "off",
                             StreamType = streamType
                         }
                     };
@@ -253,25 +253,22 @@ namespace JuvoReactNative
         [ReactMethod]
         public async void SetStream(int selectionIndex, int streamTypeIndex, IPromise promise)
         {
-            async Task<PlayerState> SetStreamInternal(int selectedIndex, int streamIndex)
+            async Task<PlayerState> SetStreamInternal(StreamDescription targetStream)
             {
-                bool haveStreamData = _allStreamsDescriptions[streamTypeIndex] != null && selectedIndex != -1;
-                StreamType streamType = (StreamType)streamIndex;
-
-                if (haveStreamData)
-                {
-                    if (streamType == StreamType.Subtitle && selectedIndex == 0)
-                        Player.DeactivateStream(StreamType.Subtitle);
-                    else
-                        await Player.ChangeActiveStream(this._allStreamsDescriptions[streamIndex][selectedIndex]);
-                }
+                if (targetStream.StreamType == StreamType.Subtitle && targetStream.Id == "off")
+                    Player.DeactivateStream(StreamType.Subtitle);
+                else
+                    await Player.ChangeActiveStream(targetStream);
 
                 return Player.State;
             }
 
             try
             {
-                var playerState = await SetStreamInternal(selectionIndex, streamTypeIndex).ConfigureAwait(false);
+                var playerState = _allStreamsDescriptions[streamTypeIndex] != null && selectionIndex != -1
+                    ? await SetStreamInternal(_allStreamsDescriptions[streamTypeIndex][selectionIndex]).ConfigureAwait(false)
+                    : Player.State;
+
                 promise.Resolve(playerState.ToString());
             }
             catch (Exception e)
