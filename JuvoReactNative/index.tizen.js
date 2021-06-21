@@ -59,9 +59,10 @@ export default class JuvoReactNative extends Component {
     this.state = {
       loading: true,
       navState: NavReducer(undefined, {}),
-      deepLinkIndex: 0
     };
     this.selectedClipIndex = 0;
+    this.deepLinkIndex = 0;
+
     this.switchComponentsView = this.switchComponentsView.bind(this);
     this.handleSelectedIndexChange = this.handleSelectedIndexChange.bind(this);
     this.handleDeepLink = this.handleDeepLink.bind(this);
@@ -78,20 +79,20 @@ export default class JuvoReactNative extends Component {
     DeviceEventEmitter.emit(`${this.currentView()}/onTVKeyDown`, pressed);
   }
 
-  componentWillMount() {
-    this.JuvoEventEmitter.addListener("onTVKeyDown", this.onTVKeyDown);
-    this.JuvoEventEmitter.addListener("handleDeepLink", this.handleDeepLink);
-    this.JuvoPlayer.AttachDeepLinkListener();
-  }
-
   async componentDidMount() {
+    this.JuvoEventEmitter.addListener("onTVKeyDown", this.onTVKeyDown);
+    this.JuvoEventEmitter.addListener("handleDeepLink", async (deepLink)=> 
+    {
+      await this.handleDeepLink(deepLink);
+    });
+
+    this.JuvoPlayer.AttachDeepLinkListener();
     await this.finishLoading();
   }
 
   async finishLoading() {
     await this.LoadingPromise;
     this.setState({loading: false});
-    this.forceUpdate();
   }
 
   currentView()
@@ -121,13 +122,20 @@ export default class JuvoReactNative extends Component {
   async handleDeepLink(deepLink) {
     if (deepLink.url !== null) {
       if (this.state.loading) {
-        await this.finishLoading();
+        console.log(`JuvoReactNative.handleDeepLink(): Url ${deepLink.url} waiting for load completion`);
+        await this.LoadingPromise;
       }
+
       let index = ResourceLoader.clipsData.findIndex(e => e.url === deepLink.url);
       if (index !== -1) {
-        this.setState({deepLinkIndex: index});
-        this.handleSelectedIndexChange(this.state.deepLinkIndex);
+        console.log(`JuvoReactNative.handleDeepLink(): Processing deep link url ${deepLink.url}`);
+        this.deepLinkIndex = index;
+        this.handleSelectedIndexChange(index);
         this.switchComponentsView('PlaybackView');
+      }
+      else
+      {
+        console.log(`JuvoReactNative.handleDeepLink(): Url ${deepLink.url} index not found`);
       }
     }
   }
@@ -165,7 +173,7 @@ export default class JuvoReactNative extends Component {
         visibility={true}
         switchView={this.switchComponentsView}
         onSelectedIndexChange={this.handleSelectedIndexChange}
-        deepLinkIndex={this.state.deepLinkIndex}/>
+        deepLinkIndex={this.deepLinkIndex}/>
     }
     if (key === 'PlaybackView') {
       return <PlaybackView
