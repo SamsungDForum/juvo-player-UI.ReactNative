@@ -56,16 +56,48 @@ namespace PlayerService
     {
         public static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
 
-        public static StreamDescription ToStreamDescription(this Format format, StreamType stream) =>
-            new StreamDescription
+        public static StreamDescription ToStreamDescription(this Format format, StreamType stream)
+        {
+            string description = format.Label;
+            if (string.IsNullOrWhiteSpace(description))
+            {
+                if (!string.IsNullOrWhiteSpace(format.Id) && !int.TryParse(format.Id, out _))
+                {
+                    description = format.Id;
+                }
+                else
+                {
+                    switch (stream)
+                    {
+                        case StreamType.Video:
+                            description = $"{format.Width}x{format.Height}";
+                            if (format.Bitrate != null) description += $" {format.Bitrate / 1000} kbps";
+                            break;
+
+                        case StreamType.Audio:
+                            description = $"{format.Language}";
+                            if (format.Bitrate != null) description += $" {format.Bitrate / 1000} kbps";
+                            break;
+
+                        case StreamType.Subtitle:
+                            description = $"{format.Language}";
+                            break;
+
+                        default:
+                            description = $"{stream} {format.Id}";
+                            break;
+                    }
+                }
+            }
+
+            return new StreamDescription
             {
                 Default = format.RoleFlags.HasFlag(RoleFlags.Main),
-                Description = string.IsNullOrWhiteSpace(format.Label)
-                    ? format.Id
-                    : format.Label,
+                Description = description,
                 Id = format.Id,
                 StreamType = stream
             };
+        }
 
         public static IEnumerable<StreamDescription> GetStreamDescriptionsFromStreamType(this StreamGroup[] groups, StreamType type)
         {
@@ -120,8 +152,7 @@ namespace PlayerService
                 foreach (var group in groups)
                 {
                     Logger.Debug($"Group: {group.ContentType} Entries: {group.Streams.Count}");
-                    foreach (var streamInfo in group.Streams)
-                        Logger.Debug($"\tID: {streamInfo.Format.Id} / {streamInfo.Format.ToStreamDescription(group.ContentType.ToStreamType())}");
+                    group.Streams.DumpStreamInfo();
                 }
             }
 
@@ -139,12 +170,24 @@ namespace PlayerService
             return descriptions;
         }
 
-        public static IEnumerable<StreamInfo> DumpStreamInfo(this IEnumerable<StreamInfo> streamInfos, StreamType streamType)
+        public static IEnumerable<StreamInfo> DumpStreamInfo(this IEnumerable<StreamInfo> streamInfos)
         {
             if (Logger.IsLevelEnabled(LogLevel.Debug))
             {
                 foreach (var info in streamInfos)
-                    Logger.Debug($"StreamInfo: {info.Format.Id} / {info.Format.ToStreamDescription(streamType)}");
+                {
+                    Logger.Debug($"Id: {info.Format.Id}");
+                    Logger.Debug($"\tLabel: '{info.Format.Label}'");
+                    Logger.Debug($"\tBitrate: '{info.Format.Bitrate}'");
+                    Logger.Debug($"\tChannels: '{info.Format.ChannelCount}'");
+                    Logger.Debug($"\tCodecs: '{info.Format.Codecs}'");
+                    Logger.Debug($"\tContainer: '{info.Format.ContainerMimeType}'");
+                    Logger.Debug($"\tFrameRate:'{info.Format.FrameRate}'");
+                    Logger.Debug($"\tLanguage: '{info.Format.Language}'");
+                    Logger.Debug($"\tSample: '{info.Format.SampleMimeType}'");
+                    Logger.Debug($"\tWxH: '{info.Format.Width}x{info.Format.Height}'");
+                    Logger.Debug($"\tFramerate: '{info.Format.FrameRate}'");
+                }
             }
 
             return streamInfos;
