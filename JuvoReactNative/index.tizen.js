@@ -102,16 +102,21 @@ export default class JuvoReactNative extends Component {
 
 //It is assumed that at the only one component can be visible on the screen
   switchComponentsView(componentName) {
+
+    let actionRes = false;
+
     switch (componentName) {
       case 'Previous':
-        this.handleAction({type: 'pop'});
+        actionRes = this.handleAction({type: 'pop'});
         break;
       case 'PlaybackView':
-        this.handleAction({type: 'push', key: 'PlaybackView'});
+        actionRes = this.handleAction({type: 'push', key: 'PlaybackView'});
         break;
       default:
         alert('Undefined view');
     }
+
+    console.log(`JuvoReactNative.switchComponentsView(): ${componentName} switched ${actionRes}`);
     this.setState({});
   }
 
@@ -152,32 +157,36 @@ export default class JuvoReactNative extends Component {
   }
 
   renderProgress() {
-    if (ResourceLoader.errorMessage)
+    
+    const showNotification = (ResourceLoader.errorMessage != '');
+    const showInProgrogress = this.state.loading;
+    console.debug(`JuvoReactNative.renderProgress(): Notification: ${showNotification} InProgrogress: ${showInProgrogress}`);
+
+    if (showNotification)
       return (
-          <View style={[styles.notification]}>
-            <NotificationPopup visible={true} onNotificationPopupDisappeared={this.JuvoPlayer.ExitApp} messageText={ResourceLoader.errorMessage} />
-          </View>
+        <NotificationPopup visible={true} onNotificationPopupDisappeared={this.JuvoPlayer.ExitApp} messageText={ResourceLoader.errorMessage} />
       );
-    if (this.state.loading)
+    if (showInProgrogress)
       return (
-          <View style={[styles.notification]}>
-            <InProgressView visible={true} message="Please wait..."/>
-          </View>
+        <InProgressView visible={true} messageText="Please wait..."/>
       );
+
     return null;
   }
 
   renderRoute(key) {
+    console.debug(`JuvoReactNative.renderRoute(): ${key}`);
+
     if (key === 'ContentCatalog') {
       return <ContentCatalog
-        visibility={true}
+        visible={true}
         switchView={this.switchComponentsView}
         onSelectedIndexChange={this.handleSelectedIndexChange}
         deepLinkIndex={this.deepLinkIndex}/>
     }
     if (key === 'PlaybackView') {
       return <PlaybackView
-        visibility={true}
+        visible={true}
         switchView={this.switchComponentsView}
         selectedIndex={this.selectedClipIndex}/>
     }
@@ -203,14 +212,5 @@ export default class JuvoReactNative extends Component {
       );
   }
 }
-
-const styles = StyleSheet.create({
-  notification: {
-    height: "100%", 
-    justifyContent: "center", 
-    alignItems: "center", 
-    backgroundColor: "black"
-  }
-});
 
 AppRegistry.registerComponent('JuvoReactNative', () => JuvoReactNative);

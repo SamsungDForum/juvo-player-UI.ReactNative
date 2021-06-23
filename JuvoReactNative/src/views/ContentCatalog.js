@@ -1,6 +1,6 @@
 'use strict';
 import React, { Component } from 'react';
-import { View, NativeModules, NativeEventEmitter, Dimensions, StyleSheet, DeviceEventEmitter } from 'react-native';
+import { View, NativeModules, Dimensions, StyleSheet, DeviceEventEmitter } from 'react-native';
 
 import HideableView from './HideableView';
 import ContentPicture from './ContentPicture';
@@ -15,33 +15,30 @@ const debounceTimeout = 200; // 200ms idle timeout
 export default class ContentCatalog extends Component {
   constructor(props) {
     super(props);
-    this.bigPictureVisible = this.props.visibility;
-    this.toggleVisibility = this.toggleVisibility.bind(this);
+    this.state = {
+      selectedClipIndex: 0,
+      bigPicVisible: true
+    };
+
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
     this.handleSelectedIndexChange = this.handleSelectedIndexChange.bind(this);
-    this.handleBigPicLoadStart = this.handleBigPicLoadStart.bind(this);
-    this.handleBigPicLoadEnd = this.handleBigPicLoadEnd.bind(this);
     this.JuvoPlayer = NativeModules.JuvoPlayer;
-    this.JuvoEventEmitter = new NativeEventEmitter(this.JuvoPlayer);
-    this.pendingLoads = 0;
     this.onIndexChangeDebounceCompleted = this.onIndexChangeDebounceCompleted.bind(this);
     this.debounceIndexChange = debounceCompleted;
     this.candidateIndex = 0;
-    this.selectedClipIndex = 0;
+    this.renderedBigPicUri = null;
   }
-
-  componentWillMount() {
+  
+  componentDidMount() {
+    console.debug('ContentCatalog.componentDidMount()');
     DeviceEventEmitter.addListener('ContentCatalog/onTVKeyDown', this.onTVKeyDown);
   }
 
   componentWillUnmount() {
+    console.debug('ContentCatalog.componentWillUnmount()');
     DeviceEventEmitter.removeListener('ContentCatalog/onTVKeyDown', this.onTVKeyDown);
   }
 
-  toggleVisibility() {
-    this.props.switchView('PlaybackView');
-  }
-  
   onTVKeyDown(pressed) {
     //There are two parameters available:
     //pressed.KeyName
@@ -52,12 +49,13 @@ export default class ContentCatalog extends Component {
       case 'Return':
       case 'XF86AudioPlay':
       case 'XF86PlayBack':
-        if(this.debounceIndexChange != debounceCompleted)
+        if(this.debounceIndexChange != debounceCompleted) 
         {
-          onIndexChangeDebounceCompleted(false);
+          clearTimeout(this.debounceIndexChange);
+          onIndexChangeDebounceCompleted();
         }
-
-        this.toggleVisibility();
+        
+        this.props.switchView('PlaybackView');
         break;
 
       case 'XF86Back':
@@ -66,85 +64,81 @@ export default class ContentCatalog extends Component {
     }
   }
  
-  onIndexChangeDebounceCompleted(redraw = true)
+  onIndexChangeDebounceCompleted()
   {
-    clearTimeout(this.debounceIndexChange);
     this.debounceIndexChange = debounceCompleted;
-    this.bigPictureVisible = true;
-    this.selectedClipIndex = this.candidateIndex;
+ 
+    this.setState(
+      {
+        selectedClipIndex: this.candidateIndex,
+        bigPicVisible: true
+    });
 
-    if(redraw)
-    {
-      this.forceUpdate();
-    }
+    console.debug('ContentCatalog.onIndexChangeDebounceCompleted(): done');
   }
 
   handleSelectedIndexChange(index) {
 
+    console.debug('ContentCatalog.handleSelectedIndexChange():');
+    
     if(this.debounceIndexChange != debounceCompleted)
     {
       clearTimeout(this.debounceIndexChange);
+      this.debounceIndexChange = debounceCompleted;
     }
     
     // Update index.tizen.js with new index
     this.props.onSelectedIndexChange(index);
+
     this.candidateIndex = index;
+   
+    if(this.state.bigPicVisible)
+    {
+      console.debug('ContentCatalog.handleSelectedIndexChange(): Hiding big pic');
+      this.setState({bigPicVisible: false});
+    }
+
     this.debounceIndexChange = setTimeout(this.onIndexChangeDebounceCompleted,debounceTimeout);
-
-    if(this.bigPictureVisible)
-    {
-      this.bigPictureVisible = false;
-      this.forceUpdate();
-    }
-  }
-
-  handleBigPicLoadStart() {
-    ++this.pendingLoads;
-    this.JuvoPlayer.Log('ContentCatalog.onLoadStart(): Pending loads: '+this.pendingLoads);
-  }
-
-  handleBigPicLoadEnd() {
-    --this.pendingLoads;
-    this.JuvoPlayer.Log('ContentCatalog.onLoadEnd(): Pending loads: '+this.pendingLoads);
-
-    // Don't refresh on last load.
-    if(this.pendingLoads > 0)
-    {
-      this.forceUpdate();
-    }
   }
 
   render() {
-    const index = this.selectedClipIndex;
-    const path = ResourceLoader.tilePaths[index];
-    const overlay = ResourceLoader.contentDescriptionBackground;
-    const showBigPicture = this.bigPictureVisible;
-    
-    const onLoadStart = this.handleBigPicLoadStart;
-    const onLoadEnd = this.handleBigPicLoadEnd;
-    const indexChange = this.handleSelectedIndexChange;
+    try
+    {
+      const isVisible = this.props.visible;
+      const isBigPicVisible = (this.state.bigPicVisible && isVisible);
+      
+      const index = this.state.selectedClipIndex;
+      const remoteUri = isBigPicVisible ? Object.freeze({ uri: ResourceLoader.tilePaths[index]}) : this.renderedBigPicUri;
+      this.renderedBigPicUri = remoteUri;
 
-    return (
-      <HideableView visible={this.props.visibility} duration={300}>
-        <View style={[styles.page, { alignItems: 'flex-end' }]}>
-          <View style={[styles.cell, { height: '70%', width: '70%' }]}>
-            <HideableView visible={showBigPicture} duration={100}>
-              <ContentPicture selectedIndex={index} visible={showBigPicture} path={path} width={'100%'} height={'100%'} 
-                onLoadStart={onLoadStart} 
-                onLoadEnd={onLoadEnd}/>
-            </HideableView>
-            <ContentPicture position={'absolute'} source={overlay} selectedIndex={index} width={'100%'} height={'100%'} />
+      const overlay = ResourceLoader.contentDescriptionBackground;
+      const indexChange = this.handleSelectedIndexChange;
+
+      const deepLink = this.props.deepLinkIndex;
+
+      console.debug(`ContentCatalog.render(): Visible: ${isVisible} BigPicVisible ${isBigPicVisible}`);
+      return (
+        <HideableView visible={isVisible} duration={300}>
+          <View style={[styles.page, { alignItems: 'flex-end' }]}>
+            <View style={[styles.cell, { height: '70%', width: '70%' }]}>
+              <ContentPicture fadeDuration={100} visible={isBigPicVisible} source={remoteUri} width={'100%'} height={'100%'} />
+              <ContentPicture visible={isVisible} position={'absolute'} source={overlay} selectedIndex={index} width={'100%'} height={'100%'} />
+            </View>
           </View>
-        </View>
-        <View style={[styles.page, { position: 'absolute' }]}>
-          <ContentScroll
-            onSelectedIndexChange={indexChange}
-            contentURIs={ResourceLoader.tilePaths}
-            deepLinkIndex={this.props.deepLinkIndex}
-          />
-        </View>
-      </HideableView>
-    );
+          <View style={[styles.page, { position: 'absolute' }]}>
+            <ContentScroll
+              onSelectedIndexChange={indexChange}
+              contentURIs={ResourceLoader.tilePaths}
+              deepLinkIndex={deepLink}
+            />
+          </View>
+        </HideableView>
+      );
+    }
+    catch(error)
+    {
+        console.error(error);
+    }
   }
 }
 
