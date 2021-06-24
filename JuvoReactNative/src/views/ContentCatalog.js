@@ -26,7 +26,6 @@ export default class ContentCatalog extends Component {
     this.onIndexChangeDebounceCompleted = this.onIndexChangeDebounceCompleted.bind(this);
     this.debounceIndexChange = debounceCompleted;
     this.candidateIndex = 0;
-    this.renderedBigPicUri = null;
   }
   
   componentDidMount() {
@@ -108,9 +107,8 @@ export default class ContentCatalog extends Component {
       const isBigPicVisible = (this.state.bigPicVisible && isVisible);
       
       const index = this.state.selectedClipIndex;
-      const remoteUri = isBigPicVisible ? Object.freeze({ uri: ResourceLoader.tilePaths[index]}) : this.renderedBigPicUri;
-      this.renderedBigPicUri = remoteUri;
-
+      const remoteUri = Object.freeze({ uri: ResourceLoader.tilePaths[index]});
+      
       const overlay = ResourceLoader.contentDescriptionBackground;
       const indexChange = this.handleSelectedIndexChange;
 
