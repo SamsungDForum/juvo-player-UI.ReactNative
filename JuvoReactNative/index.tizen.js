@@ -159,14 +159,14 @@ export default class JuvoReactNative extends Component {
   renderProgress() {
     
     const showNotification = (ResourceLoader.errorMessage != '');
-    const showInProgrogress = this.state.loading;
-    console.debug(`JuvoReactNative.renderProgress(): Notification: ${showNotification} InProgrogress: ${showInProgrogress}`);
+    const showInProgress = this.state.loading;
+    console.debug(`JuvoReactNative.renderProgress(): Notification: ${showNotification} InProgrogress: ${showInProgress}`);
 
     if (showNotification)
       return (
         <NotificationPopup visible={true} onNotificationPopupDisappeared={this.JuvoPlayer.ExitApp} messageText={ResourceLoader.errorMessage} />
       );
-    if (showInProgrogress)
+    if (showInProgress)
       return (
         <InProgressView visible={true} messageText="Please wait..."/>
       );

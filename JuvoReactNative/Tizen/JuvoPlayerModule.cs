@@ -32,11 +32,10 @@ using Newtonsoft.Json.Linq;
 using PlayerService;
 using Tizen.Applications;
 using UI.Common;
-using IAsyncDisposable = ReactNative.Bridge.IAsyncDisposable;
 
 namespace JuvoReactNative
 {
-    public class JuvoPlayerModule : ReactContextNativeModuleBase, ILifecycleEventListener, ISeekLogicClient, IAsyncDisposable
+    public class JuvoPlayerModule : ReactContextNativeModuleBase, ILifecycleEventListener, ISeekLogicClient
     {
         private Timer _playbackTimer;
         private readonly SeekLogic _seekLogic = null; // needs to be initialized in the constructor!
@@ -450,14 +449,6 @@ namespace JuvoReactNative
                 //Context.RemoveLifecycleEventListener(this);
                 _mainSynchronizationContext.Post(_ => Application.Current.Exit(), null);
             }
-        }
-
-        public Task DisposeAsync()
-        {
-            Logger.Info("");
-            Logger.Info("done");
-            return Task.CompletedTask;
-
         }
     }
 }

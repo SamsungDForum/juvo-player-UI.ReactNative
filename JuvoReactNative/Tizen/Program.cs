@@ -89,6 +89,7 @@ namespace JuvoReactNative
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             ServicePointManager.DefaultConnectionLimit = 100;
             base.OnCreate();
+            RootView.BackgroundColor = ElmSharp.Color.Transparent;
 
             Log.Debug(Tag, "OnCreate() done");
         }
@@ -97,12 +98,12 @@ namespace JuvoReactNative
         {
             Log.Debug(Tag, $"OnAppControlReceived()");
 
-            RootView.BackgroundColor = ElmSharp.Color.Transparent;
             var payloadParser = new PayloadParser(e.ReceivedAppControl);
             if (payloadParser.TryGetUrl(out var url))
                 deepLinkReceivedSubject.OnNext(url);
 
             base.OnAppControlReceived(e);
+
             Log.Debug(Tag, "OnAppControlReceived() done");
         }
 
