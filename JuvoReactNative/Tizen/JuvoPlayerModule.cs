@@ -76,7 +76,6 @@ namespace JuvoReactNative
         {
             using (LogScope.Create(url))
                 Context.RunOnNativeModulesQueueThread(() => SendEvent("handleDeepLink", new JObject { { "url", url } }));
-
         }
 
         private void OnDeepLinkClosed()
