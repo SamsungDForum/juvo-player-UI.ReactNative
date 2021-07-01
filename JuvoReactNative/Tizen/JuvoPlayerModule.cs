@@ -65,12 +65,7 @@ namespace JuvoReactNative
             _mainSynchronizationContext = mainSynchronizationContext;
         }
 
-        private void DumpContext()
-        {
-            Logger.Debug($"Dispatcher: {Context.IsOnDispatcherQueueThread()}");
-            Logger.Debug($"Native: {Context.IsOnNativeModulesQueueThread()}");
-            Logger.Debug($"JavaScript: {Context.IsOnJavaScriptQueueThread()}");
-        }
+        
 
         private void OnDeepLinkReceived(string url)
         {
@@ -448,6 +443,30 @@ namespace JuvoReactNative
                 //Context.RemoveLifecycleEventListener(this);
                 _mainSynchronizationContext.Post(_ => Application.Current.Exit(), null);
             }
+        }
+    }
+
+    internal static class ContextDump
+    {
+        private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
+
+        private static void Dump(this ReactContext context)
+        {
+            string runningOn = string.Empty;
+
+            if (context.IsOnDispatcherQueueThread())
+                runningOn += "Dispatcher ";
+
+            if (context.IsOnNativeModulesQueueThread())
+                runningOn += "Native ";
+
+            if (context.IsOnJavaScriptQueueThread())
+                runningOn += "JavaScript ";
+
+            if (string.IsNullOrEmpty(runningOn))
+                runningOn = "Unknown";
+
+            Logger.Debug($"Thread: {runningOn}");
         }
     }
 }
