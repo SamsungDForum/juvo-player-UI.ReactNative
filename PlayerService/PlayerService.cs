@@ -195,26 +195,23 @@ namespace PlayerService
         {
             async Task ChangeStreamJob(StreamDescription targetStream)
             {
-                Logger.Info($"Selecting {targetStream.StreamType} {targetStream.Description}");
-
                 var selected = _player.GetStreamGroups()
-                    .SelectStream(
-                        targetStream.StreamType.ToContentType(),
-                        targetStream.Id);
+                    .SelectStream(targetStream);
 
-                if (selected.selector == null)
+                if (selected != default)
                 {
-                    Logger.Warn($"Stream index not found {targetStream.StreamType} {targetStream.Description}");
-                    return;
+                    var (newGroups, newSelectors) = _player
+                        .GetSelectedStreamGroups()
+                        .UpdateSelection(selected);
+
+                    await _player.SetStreamGroups(newGroups, newSelectors);
+
+                    Logger.Info($"{targetStream} Selected");
                 }
-
-                var (newGroups, newSelectors) = _player
-                    .GetSelectedStreamGroups()
-                    .UpdateSelection(selected);
-
-                Logger.Info($"Using {selected.selector.GetType()} for {targetStream.StreamType} {targetStream.Description}");
-
-                await _player.SetStreamGroups(newGroups, newSelectors);
+                else
+                {
+                    Logger.Warn($"{targetStream} not found");
+                }
             }
 
             var job = await _playerThread
@@ -233,14 +230,10 @@ namespace PlayerService
         {
             async Task<List<StreamDescription>> GetStreamsJob(StreamType stream)
             {
-                var description = _player
+                return _player
                     .GetStreamGroups()
                     .GetStreamDescriptionsFromStreamType(stream)
                     .ToList();
-
-                Logger.Info($"{stream} {description.Count} entries");
-
-                return description;
             }
 
             var job = await _playerThread
@@ -271,9 +264,7 @@ namespace PlayerService
                     Logger.Error($"Prepare failed {e.Message}");
 
                     if (_player != default)
-                    {
                         await _player.DisposeAsync();
-                    }
 
                     throw;
                 }

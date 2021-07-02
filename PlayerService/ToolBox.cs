@@ -58,54 +58,48 @@ namespace PlayerService
 
         public static StreamDescription ToStreamDescription(this Format format, StreamType stream)
         {
-            string description;
-
-            switch (stream)
+            string description = format.Label;
+            if (string.IsNullOrWhiteSpace(description))
             {
-                case StreamType.Video:
-                    description = $"{format.Width}x{format.Height} {format.Label}";
-                    if (string.IsNullOrWhiteSpace(description))
-                        description = "Video " + format.Id;
-
-                    return new StreamDescription
+                if (!string.IsNullOrWhiteSpace(format.Id) && !int.TryParse(format.Id, out _))
+                {
+                    description = format.Id;
+                }
+                else
+                {
+                    switch (stream)
                     {
-                        Default = format.RoleFlags.HasFlag(RoleFlags.Main),
-                        Description = description,
-                        Id = format.Id,
-                        StreamType = stream
-                    };
+                        case StreamType.Video:
+                            description = $"{format.Width}x{format.Height}";
+                            if (format.Bitrate != null) description += $" {format.Bitrate / 1000} kbps";
+                            break;
 
-                case StreamType.Audio:
-                    description = $"{format.Language} {format.ChannelCount} {format.Label}";
-                    if (string.IsNullOrWhiteSpace(description))
-                        description = "Audio " + format.Id;
+                        case StreamType.Audio:
+                            description = $"{format.Language}";
+                            if (format.Bitrate != null) description += $" {format.Bitrate / 1000} kbps";
+                            break;
 
-                    return new StreamDescription
-                    {
-                        Default = format.RoleFlags.HasFlag(RoleFlags.Main),
-                        Description = description,
-                        Id = format.Id,
-                        StreamType = stream
-                    };
+                        case StreamType.Subtitle:
+                            description = $"{format.Language}";
+                            break;
 
-                default:
-                    description = format.Label;
-                    if (string.IsNullOrWhiteSpace(description))
-                        description = $"{stream} {format.Id}";
-
-                    return new StreamDescription
-                    {
-                        Default = format.RoleFlags.HasFlag(RoleFlags.Main),
-                        Description = description,
-                        Id = format.Id,
-                        StreamType = stream
-                    };
-
+                        default:
+                            description = $"{stream} {format.Id}";
+                            break;
+                    }
+                }
             }
+
+            return new StreamDescription
+            {
+                Default = format.RoleFlags.HasFlag(RoleFlags.Main),
+                Description = description,
+                Id = format.Id,
+                StreamType = stream
+            };
         }
 
-        public static IEnumerable<StreamDescription> GetStreamDescriptionsFromStreamType(this StreamGroup[] groups,
-            StreamType type)
+        public static IEnumerable<StreamDescription> GetStreamDescriptionsFromStreamType(this StreamGroup[] groups, StreamType type)
         {
             ContentType content = type.ToContentType();
             return groups
@@ -114,17 +108,25 @@ namespace PlayerService
                 .Select(format => format.Format.ToStreamDescription(type));
         }
 
-        public static (StreamGroup group, IStreamSelector selector) SelectStream(this StreamGroup[] groups, ContentType type, string id)
+        public static (StreamGroup group, IStreamSelector selector) SelectStream(this StreamGroup[] groups, StreamDescription targetStream)
         {
-            StreamGroup selectedContent = groups.FirstOrDefault(group => group.ContentType == type);
+            ContentType type = targetStream.StreamType.ToContentType();
 
-            if (selectedContent?.Streams.Count != selectedContent?.Streams.Select(stream => stream.Format.Id).Distinct().Count())
-                Logger.Warn("Stream Format IDs are not unique. Stream selection may not be accurate");
+            var prospectGroups = groups
+                .Where(group => group.ContentType == type)
+                .Select(group => group);
 
-            int index = selectedContent?.Streams.IndexOf(
-                selectedContent.Streams.FirstOrDefault(stream => stream.Format.Id == id)) ?? -1;
+            foreach (var prospect in prospectGroups)
+            {
+                var prospectStreams = prospect.Streams.Count;
+                for (var streamIndex = 0; streamIndex < prospectStreams; streamIndex++)
+                {
+                    if (prospect.Streams[streamIndex].Format.Id.Equals(targetStream.Id))
+                        return (prospect, new FixedStreamSelector(streamIndex));
+                }
+            }
 
-            return (selectedContent, index == -1 ? null : new FixedStreamSelector(index));
+            return default;
         }
 
         public static (StreamGroup[], IStreamSelector[]) UpdateSelection(
@@ -141,6 +143,54 @@ namespace PlayerService
             }
 
             return currentSelection;
+        }
+
+        public static StreamGroup[] DumpStreamGroups(this StreamGroup[] groups)
+        {
+            if (Logger.IsLevelEnabled(LogLevel.Debug))
+            {
+                foreach (var group in groups)
+                {
+                    Logger.Debug($"Group: {group.ContentType} Entries: {group.Streams.Count}");
+                    group.Streams.DumpStreamInfo();
+                }
+            }
+
+            return groups;
+        }
+
+        public static IEnumerable<StreamDescription> DumpStreamDescriptions(this IEnumerable<StreamDescription> descriptions)
+        {
+            if (Logger.IsLevelEnabled(LogLevel.Debug))
+            {
+                foreach (var description in descriptions)
+                    Logger.Debug($"Stream: {description}");
+            }
+
+            return descriptions;
+        }
+
+        public static IEnumerable<StreamInfo> DumpStreamInfo(this IEnumerable<StreamInfo> streamInfos)
+        {
+            if (Logger.IsLevelEnabled(LogLevel.Debug))
+            {
+                foreach (var info in streamInfos)
+                {
+                    Logger.Debug($"Id: {info.Format.Id}");
+                    Logger.Debug($"\tLabel: '{info.Format.Label}'");
+                    Logger.Debug($"\tBitrate: '{info.Format.Bitrate}'");
+                    Logger.Debug($"\tChannels: '{info.Format.ChannelCount}'");
+                    Logger.Debug($"\tCodecs: '{info.Format.Codecs}'");
+                    Logger.Debug($"\tContainer: '{info.Format.ContainerMimeType}'");
+                    Logger.Debug($"\tFrameRate:'{info.Format.FrameRate}'");
+                    Logger.Debug($"\tLanguage: '{info.Format.Language}'");
+                    Logger.Debug($"\tSample: '{info.Format.SampleMimeType}'");
+                    Logger.Debug($"\tWxH: '{info.Format.Width}x{info.Format.Height}'");
+                    Logger.Debug($"\tFramerate: '{info.Format.FrameRate}'");
+                }
+            }
+
+            return streamInfos;
         }
     }
 }

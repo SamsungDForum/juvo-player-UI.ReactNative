@@ -5,6 +5,7 @@ using System.Net;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using ReactNative;
+using ReactNative.Bridge;
 using ReactNative.Shell;
 using ReactNative.Modules.Core;
 using Log = Tizen.Log;
@@ -18,7 +19,7 @@ namespace JuvoReactNative
     {
         public static readonly string Tag = "JuvoRN";
 
-        private BehaviorSubject<string> deepLinkReceivedSubject = new BehaviorSubject<string>(null);
+        private ReplaySubject<string> deepLinkReceivedSubject = new ReplaySubject<string>(1);
         public override string MainComponentName
         {
             get
@@ -33,7 +34,7 @@ namespace JuvoReactNative
                 return "index.tizen";
             }
         }
-#if !DEBUG
+#if !DEBUGJS
         public override string JavaScriptBundleFile
         {
             get
@@ -46,7 +47,7 @@ namespace JuvoReactNative
         {
             get
             {
-                Log.Error(Tag, "Packages loading...");
+                Log.Info(Tag, "Packages loading...");
                 return new List<IReactPackage>
                 {
                     new MainReactPackage(),
@@ -58,7 +59,7 @@ namespace JuvoReactNative
         {
             get
             {
-#if DEBUG
+#if DEBUGJS
                 return true;
 #else
                 return false;
@@ -82,21 +83,41 @@ namespace JuvoReactNative
         }
         protected override void OnCreate()
         {
-            base.OnCreate();
-            Log.Error(Tag, "OnCreate()...");
+
+            Log.Debug(Tag, "OnCreate()");
+
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             ServicePointManager.DefaultConnectionLimit = 100;
+            base.OnCreate();
             RootView.BackgroundColor = ElmSharp.Color.Transparent;
+
+            Log.Debug(Tag, "OnCreate() done");
         }
 
         protected override void OnAppControlReceived(AppControlReceivedEventArgs e)
         {
-            base.OnAppControlReceived(e);
+            Log.Debug(Tag, $"OnAppControlReceived()");
+
             var payloadParser = new PayloadParser(e.ReceivedAppControl);
-            if (!payloadParser.TryGetUrl(out var url))
-                return;
-            deepLinkReceivedSubject.OnNext(url);
+            if (payloadParser.TryGetUrl(out var url))
+                deepLinkReceivedSubject.OnNext(url);
+
+            base.OnAppControlReceived(e);
+
+            Log.Debug(Tag, "OnAppControlReceived() done");
         }
+
+        protected override void OnTerminate()
+        {
+            Log.Debug(Tag, "OnTerminate()");
+
+            deepLinkReceivedSubject.OnCompleted();
+            deepLinkReceivedSubject.Dispose();
+            base.OnTerminate();
+
+            Log.Debug(Tag, "OnTerminate() done");
+        }
+
 
         public IObservable<string> DeepLinkReceived()
         {

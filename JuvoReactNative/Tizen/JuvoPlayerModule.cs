@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -42,7 +43,6 @@ namespace JuvoReactNative
         private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
 
         private EcoreEvent<EcoreKeyEventArgs> _keyDown;
-        private EcoreEvent<EcoreKeyEventArgs> _keyUp;
 
         // assumes StreamType values are sequential [0..N]
         private readonly List<StreamDescription>[] _allStreamsDescriptions = new List<StreamDescription>[Enum.GetValues(typeof(StreamType)).Length];
@@ -65,45 +65,57 @@ namespace JuvoReactNative
             _mainSynchronizationContext = mainSynchronizationContext;
         }
 
+        
+
         private void OnDeepLinkReceived(string url)
         {
-            SendEvent("handleDeepLink", new JObject { { "url", url } });
+            using (LogScope.Create(url))
+                Context.RunOnNativeModulesQueueThread(() => SendEvent("handleDeepLink", new JObject { { "url", url } }));
+        }
+
+        private void OnDeepLinkClosed()
+        {
+            using (LogScope.Create())
+            {
+                Context.RunOnNativeModulesQueueThread(() =>
+                {
+                    _deepLinkSub?.Dispose();
+                    _deepLinkSub = null;
+                });
+            }
         }
 
         public override string Name => "JuvoPlayer";
 
-        private void SendEvent(string eventName, JObject parameters) =>
+        private void SendEvent(string eventName, JObject parameters)
+        {
+            Debug.Assert(Context.IsOnNativeModulesQueueThread(), $"{eventName} not on native module thread.");
             Context.GetJavaScriptModule<RCTDeviceEventEmitter>().emit(eventName, parameters);
+        }
+
 
         public override void Initialize()
         {
-            Context.AddLifecycleEventListener(this);
-            _keyDown = new EcoreEvent<EcoreKeyEventArgs>(EcoreEventType.KeyDown, EcoreKeyEventArgs.Create);
-            _keyDown.On += (s, e) =>
+            using (LogScope.Create())
             {
-                //Propagate the key press event to JavaScript module
-                var param = new JObject();
-                param.Add("KeyName", e.KeyName);
-                param.Add("KeyCode", e.KeyCode);
-                SendEvent("onTVKeyDown", param);
-            };
-            _keyUp = new EcoreEvent<EcoreKeyEventArgs>(EcoreEventType.KeyUp, EcoreKeyEventArgs.Create);
-            _keyUp.On += (s, e) =>
-            {
-                //Propagate the key press event to JavaScript module
-                var param = new JObject();
-                param.Add("KeyName", e.KeyName);
-                param.Add("KeyCode", e.KeyCode);
-                SendEvent("onTVKeyUp", param);
-            };
+                // Lifecycle events will be on dispatcher thread.
+                Context.AddLifecycleEventListener(this);
+                _keyDown = new EcoreEvent<EcoreKeyEventArgs>(EcoreEventType.KeyDown, EcoreKeyEventArgs.Create);
+                _keyDown.On += (s, e) =>
+                {
+                    //Propagate the key press event to JavaScript module
+                    var param = new JObject();
+                    param.Add("KeyName", e.KeyName);
+                    param.Add("KeyCode", e.KeyCode);
+                    Context.RunOnNativeModulesQueueThread(() => SendEvent("onTVKeyDown", param));
+                };
+            }
         }
 
         private void ResumeTimedDataUpdate()
         {
             using (LogScope.Create())
-            {
                 _playbackTimer.Change(TimeSpan.Zero, TimedDataUpdateInterval); //resume update
-            }
         }
 
         private void SuspendTimedDataUpdate()
@@ -122,30 +134,40 @@ namespace JuvoReactNative
             _eosSub.Dispose();
         }
 
-        public void OnDestroy()
-        {
-            Logger.Info();
-            DisposePlayerSubscribers();
-            _seekCompletedSub.Dispose();
-            _deepLinkSub.Dispose();
-            _playbackTimer.Dispose();
-            _playbackTimer = null;
-            Player.Dispose();
-            Player = null;
-            Logger.Info("JuvoPlayerModule disposed");
-        }
-
-        public void OnResume()
+        private void TerminatePlayerService()
         {
             bool havePlayer = Player != null;
+            Logger.Info($"Have player: {havePlayer}");
 
-            using (LogScope.Create($"Have player: {havePlayer}"))
+            if (havePlayer)
             {
-                if (!havePlayer)
-                    return;
+                DisposePlayerSubscribers();
+                _seekCompletedSub.Dispose();
+                _playbackTimer.Dispose();
+                _playbackTimer = null;
+                Player.Dispose();
+                Player = null;
+                Logger.Info("PlayerService kicked the bucket");
+            }
+        }
 
+        void ILifecycleEventListener.OnDestroy()
+        {
+            Logger.Info("Unicorn event!");
+        }
+
+        void ILifecycleEventListener.OnResume()
+        {
+            using (LogScope.Create())
+            {
                 Context.RunOnNativeModulesQueueThread(async () =>
                 {
+                    bool havePlayer = Player != null;
+
+                    Logger.Info($"Have player: {havePlayer}");
+                    if (!havePlayer)
+                        return;
+
                     try
                     {
                         await Player.Resume();
@@ -159,17 +181,18 @@ namespace JuvoReactNative
             }
         }
 
-        public void OnSuspend()
+        void ILifecycleEventListener.OnSuspend()
         {
-            bool havePlayer = Player != null;
-
-            using (LogScope.Create($"Have player: {havePlayer}"))
+            using (LogScope.Create())
             {
-                if (!havePlayer)
-                    return;
-
                 Context.RunOnNativeModulesQueueThread(async () =>
                 {
+                    bool havePlayer = Player != null;
+
+                    Logger.Info($"Have player: {havePlayer}");
+                    if (!havePlayer)
+                        return;
+
                     _seekLogic.Reset();
                     SuspendTimedDataUpdate();
                     await Player.Suspend();
@@ -182,35 +205,40 @@ namespace JuvoReactNative
             //Propagate the bufffering progress event to JavaScript module
             var param = new JObject();
             param.Add("Percent", percent);
-            SendEvent("onUpdateBufferingProgress", param);
+            Context.RunOnNativeModulesQueueThread(() => SendEvent("onUpdateBufferingProgress", param));
         }
 
         private void UpdateTimedData(object _ = default)
         {
-            var txt = Player?.CurrentCueText ?? string.Empty;
-            var param = new JObject();
-            param.Add("Total", (int)_seekLogic.Duration.TotalMilliseconds);
-            param.Add("Current", (int)_seekLogic.CurrentPositionUI.TotalMilliseconds);
-            param.Add("SubtiteText", txt);
-            SendEvent("onUpdatePlayTime", param);
+            Context.RunOnNativeModulesQueueThread(() =>
+            {
+                var txt = Player?.CurrentCueText ?? string.Empty;
+                var param = new JObject();
+                param.Add("Total", (int)_seekLogic.Duration.TotalMilliseconds);
+                param.Add("Current", (int)_seekLogic.CurrentPositionUI.TotalMilliseconds);
+                param.Add("SubtiteText", txt);
+                SendEvent("onUpdatePlayTime", param);
+            });
         }
 
         private void InitialisePlayback()
         {
             _playbackTimer = new Timer(UpdateTimedData, default, Timeout.Infinite, Timeout.Infinite);
-            _seekCompletedSub = _seekLogic.SeekCompleted().Subscribe(_ => SendEvent("onSeekCompleted", new JObject()));
+            _seekCompletedSub = _seekLogic.SeekCompleted().Subscribe(_ =>
+                Context.RunOnNativeModulesQueueThread(() => SendEvent("onSeekCompleted", new JObject())));
 
             Player = new PlayerService.PlayerService();
             Player.SetWindow(ReactProgram.RctWindow);
 
             _bufferingProgressSub = Player.BufferingProgress().Subscribe(UpdateBufferingProgress);
-            _eosSub = Player.EndOfStream().Subscribe(_ => SendEvent("onEndOfStream", new JObject()));
-            _playbackErrorsSub = Player.PlaybackError()
-                .Subscribe(message =>
+            _eosSub = Player.EndOfStream().Subscribe(_ =>
+                Context.RunOnNativeModulesQueueThread(() => SendEvent("onEndOfStream", new JObject())));
+
+            _playbackErrorsSub = Player.PlaybackError().Subscribe(message =>
                 {
                     var param = new JObject();
                     param.Add("Message", message);
-                    SendEvent("onPlaybackError", param);
+                    Context.RunOnNativeModulesQueueThread(() => SendEvent("onPlaybackError", param));
                 });
         }
 
@@ -230,7 +258,7 @@ namespace JuvoReactNative
                         {
                             Default = true,
                             Description = "off",
-                            Id = "0",
+                            Id = "off",
                             StreamType = streamType
                         }
                     };
@@ -247,7 +275,7 @@ namespace JuvoReactNative
 
             try
             {
-                var streams =await GetStreamsDescriptionInternal(streamTypeIndex, (StreamType) streamTypeIndex)
+                var streams = await GetStreamsDescriptionInternal(streamTypeIndex, (StreamType)streamTypeIndex)
                     .ConfigureAwait(false);
                 var param = new JObject();
                 param.Add("Description", Newtonsoft.Json.JsonConvert.SerializeObject(streams));
@@ -263,25 +291,22 @@ namespace JuvoReactNative
         [ReactMethod]
         public async void SetStream(int selectionIndex, int streamTypeIndex, IPromise promise)
         {
-            async Task<PlayerState> SetStreamInternal(int selectedIndex, int streamIndex)
+            async Task<PlayerState> SetStreamInternal(StreamDescription targetStream)
             {
-                bool haveStreamData = _allStreamsDescriptions[streamTypeIndex] != null && selectedIndex != -1;
-                StreamType streamType = (StreamType)streamIndex;
-
-                if (haveStreamData)
-                {
-                    if (streamType == StreamType.Subtitle && selectedIndex == 0)
-                        Player.DeactivateStream(StreamType.Subtitle);
-                    else
-                        await Player.ChangeActiveStream(this._allStreamsDescriptions[streamIndex][selectedIndex]);
-                }
+                if (targetStream.StreamType == StreamType.Subtitle && targetStream.Id == "off")
+                    Player.DeactivateStream(StreamType.Subtitle);
+                else
+                    await Player.ChangeActiveStream(targetStream);
 
                 return Player.State;
             }
 
             try
             {
-                var playerState = await SetStreamInternal(selectionIndex, streamTypeIndex).ConfigureAwait(false);
+                var playerState = _allStreamsDescriptions[streamTypeIndex] != null && selectionIndex != -1
+                    ? await SetStreamInternal(_allStreamsDescriptions[streamTypeIndex][selectionIndex]).ConfigureAwait(false)
+                    : Player.State;
+
                 promise.Resolve(playerState.ToString());
             }
             catch (Exception e)
@@ -344,12 +369,8 @@ namespace JuvoReactNative
         [ReactMethod]
         public void StopPlayback()
         {
-            if (Player == null)
-                return;
-
             Logger.Info();
-
-            OnDestroy();
+            TerminatePlayerService();
         }
 
         [ReactMethod]
@@ -406,14 +427,46 @@ namespace JuvoReactNative
         [ReactMethod]
         public void AttachDeepLinkListener()
         {
-            if (_deepLinkSub == null)
-                _deepLinkSub = _deepLinkSender.DeepLinkReceived().Subscribe(OnDeepLinkReceived);
+            using (LogScope.Create())
+            {
+                _deepLinkSub = _deepLinkSender
+                    .DeepLinkReceived()
+                    .Subscribe(OnDeepLinkReceived, OnDeepLinkClosed);
+            }
         }
 
         [ReactMethod]
         public void ExitApp()
         {
-            _mainSynchronizationContext.Post(_=>Application.Current.Exit(), null);
+            using (LogScope.Create())
+            {
+                //Context.RemoveLifecycleEventListener(this);
+                _mainSynchronizationContext.Post(_ => Application.Current.Exit(), null);
+            }
+        }
+    }
+
+    internal static class ContextDump
+    {
+        private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
+
+        private static void Dump(this ReactContext context)
+        {
+            string runningOn = string.Empty;
+
+            if (context.IsOnDispatcherQueueThread())
+                runningOn += "Dispatcher ";
+
+            if (context.IsOnNativeModulesQueueThread())
+                runningOn += "Native ";
+
+            if (context.IsOnJavaScriptQueueThread())
+                runningOn += "JavaScript ";
+
+            if (string.IsNullOrEmpty(runningOn))
+                runningOn = "Unknown";
+
+            Logger.Debug($"Thread: {runningOn}");
         }
     }
 }

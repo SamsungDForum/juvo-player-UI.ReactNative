@@ -122,7 +122,7 @@ export default class PlaybackSettingsView extends React.Component {
                       this.pickerChange(itemIndex, 'Subtitle');
                       this.props.onSubtitleSelection(this.props.streamsData.Subtitle[itemIndex].Description);
                     }}
-                    enabled={this.props.visible}>
+                    enabled={false}>
                     {this.props.streamsData.Subtitle.map((item, index) => {
                       return <Picker.Item label={item.Description} value={item.Id} key={index} />;
                     })}

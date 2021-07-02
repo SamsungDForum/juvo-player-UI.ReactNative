@@ -1,6 +1,6 @@
 'use strict';
 import React from 'react';
-import { View, Image, ScrollView, NativeModules, NativeEventEmitter, Dimensions, DeviceEventEmitter } from 'react-native';
+import { View, Image, ScrollView, NativeModules, Dimensions, DeviceEventEmitter } from 'react-native';
 
 import ContentPicture from './ContentPicture';
 import ContentDescription from './ContentDescription';
@@ -8,95 +8,70 @@ import ResourceLoader from '../ResourceLoader';
 
 const width = Dimensions.get('window').width;
 const height = Dimensions.get('window').height;
+const itemWidth = 454;
+const itemHeight = 260;
 
 export default class ContentScroll extends React.Component {
   constructor(props) {
     super(props);
-    this.curIndex = 0;
-    this.state = { selectedIndex: 0 };
-    this.numItems = this.props.contentURIs.length;
+    this.selectedIndex = 0;
     this.deepLinkIndex = 0;
-    this.scrolloffset = 0;
-    this.itemWidth = 454;
+    this.numItems = this.props.contentURIs.length;
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
-    this.onTVKeyUp = this.onTVKeyUp.bind(this);
-    this.handleButtonPressRight = this.handleButtonPressRight.bind(this);
-    this.handleButtonPressLeft = this.handleButtonPressLeft.bind(this);
+    this.updateIndex = this.updateIndex.bind(this);
     this.JuvoPlayer = NativeModules.JuvoPlayer;
   }
 
-  handleButtonPressRight() {
-    if (this.curIndex < this.numItems - 1) {
-      this.curIndex++;
-      this.scrolloffset = this.curIndex * this.itemWidth;
-      this._scrollView.scrollTo({ x: this.scrolloffset, y: 0, animated: true });
-    }
-    this.setState({ selectedIndex: this.curIndex });
-  }
-
-  handleButtonPressLeft() {
-    if (this.curIndex > 0) {
-      this.curIndex--;
-      this.scrolloffset = this.curIndex * this.itemWidth;
-      this._scrollView.scrollTo({ x: this.scrolloffset, y: 0, animated: true });
-    }
-    this.setState({ selectedIndex: this.curIndex });
+  updateIndex(newIndex, animate = true)
+  {
+    if(newIndex < 0 || newIndex >= this.numItems || newIndex == this.selectedIndex)
+      return;
+  
+    let scrolloffset = newIndex * itemWidth;
+    this._scrollView.scrollTo({ x: scrolloffset, y: 0, animated: animate });
+    this.props.onSelectedIndexChange(newIndex);
+    this.selectedIndex = newIndex;
   }
 
   componentWillMount() {
-    DeviceEventEmitter.addListener('ContentScroll/onTVKeyDown', this.onTVKeyDown);
-    DeviceEventEmitter.addListener('ContentScroll/onTVKeyUp', this.onTVKeyUp);
+    DeviceEventEmitter.addListener('ContentCatalog/onTVKeyDown', this.onTVKeyDown);
   }
   
   componentWillUnmount() {
-    DeviceEventEmitter.removeListener('ContentScroll/onTVKeyDown', this.onTVKeyDown);
-    DeviceEventEmitter.removeListener('ContentScroll/onTVKeyUp', this.onTVKeyUp);
+    DeviceEventEmitter.removeListener('ContentCatalog/onTVKeyDown', this.onTVKeyDown);
   }
 
   componentWillReceiveProps(nextProps) {
-    if (this.deepLinkIndex === nextProps.deepLinkIndex) return;
+    if(this.deepLinkIndex == nextProps.deepLinkIndex)
+      return;
 
-    this.deepLinkIndex = nextProps.deepLinkIndex;
-    this.curIndex = this.deepLinkIndex;
-    this.scrolloffset = this.curIndex * this.itemWidth;
-    setTimeout(() => this._scrollView.scrollTo({ x: this.scrolloffset, y: 0, animated: false }), 100);
-    this.setState({ selectedIndex: this.curIndex });
+    this.deepLinkIndex = nextProps.deepLinkIndex;    
+    this.updateIndex(nextProps.deepLinkIndex, false);
   }
 
   onTVKeyDown(pressed) {
+
     //There are two parameters available:
     //params.KeyName
     //params.KeyCode
-    if (this.props.keysListenningOff) return;
-
+    
     switch (pressed.KeyName) {
       case 'Right':
-        this.handleButtonPressRight();
+        this.updateIndex(this.selectedIndex + 1);
         break;
+
       case 'Left':
-        this.handleButtonPressLeft();
+        this.updateIndex(this.selectedIndex - 1);
         break;
     }
   }
 
-  onTVKeyUp(pressed) {
-    if (this.props.keysListenningOff) return;
-
-    this.props.onSelectedIndexChange(this.curIndex);
-    this.setState({ selectedIndex: this.curIndex });
-  }
-
-  shouldComponentUpdate(nextProps, nextState) {
-    return nextState.selectedIndex != this.state.selectedIndex;
-  }
-
   render() {
-    const index = this.state.selectedIndex;
+    const index = this.selectedIndex;
     const title = ResourceLoader.clipsData[index].title;
     const description = ResourceLoader.clipsData[index].description;
-    const itemWidth = 454;
-    const itemHeight = 260;
     const overlayIcon = ResourceLoader.playbackIcons.play;
+    
     const renderThumbs = (uri, i) => (
       <View key={i}>
         <Image resizeMode='cover' style={{ top: itemHeight / 2 + 35, left: itemWidth / 2 - 25 }} source={overlayIcon} />

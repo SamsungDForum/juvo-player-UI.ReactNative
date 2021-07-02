@@ -1,7 +1,16 @@
 import React, { Component } from 'react';
-import { View, Text, NativeModules, NativeEventEmitter } from 'react-native';
+import { View, Text, NativeModules, NativeEventEmitter,StyleSheet, } from 'react-native';
 
 import HideableView from './HideableView';
+
+const styles = StyleSheet.create({
+  notification: {
+    height: "100%", 
+    justifyContent: "center", 
+    alignItems: "center", 
+    backgroundColor: "black"
+  }
+});
 
 export default class NotificationPopup extends Component {
   constructor(props) {
@@ -13,7 +22,7 @@ export default class NotificationPopup extends Component {
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
     this.handleConfirm = this.handleConfirm.bind(this);
   }
-
+  
   componentWillMount() {
     this.JuvoEventEmitter.addListener('onTVKeyDown', this.onTVKeyDown);
   }
@@ -48,23 +57,26 @@ export default class NotificationPopup extends Component {
 
   render() {
     const fadeduration = 300;
+    const message = this.props.messageText
     return (
-      <View style={{ width: 850, height: 430 }}>
-        <HideableView visible={this.props.visible} duration={fadeduration}>
-          <View
-            style={{
-              width: '100%',
-              height: '100%',
-              justifyContent: 'space-around',
-              alignItems: 'center',
-              padding: 5,
-              backgroundColor: '#ffffff',
-              opacity: 0.8
-            }}>
-            <Text style={{ fontSize: 40, color: '#000000', textAlign: 'center' }}> {this.props.messageText} </Text>
-            <Text style={{ fontSize: 20, color: '#000000', textAlign: 'center' }}> Press enter or return key to close </Text>
-          </View>
-        </HideableView>
+      <View style={[styles.notification]}>
+        <View style={{ width: 850, height: 430 }}>
+          <HideableView visible={this.props.visible} duration={fadeduration}>
+            <View
+              style={{
+                width: '100%',
+                height: '100%',
+                justifyContent: 'space-around',
+                alignItems: 'center',
+                padding: 5,
+                backgroundColor: '#ffffff',
+                opacity: 0.8
+              }}>
+              <Text style={{ fontSize: 40, color: '#000000', textAlign: 'center' }}> {message} </Text>
+              <Text style={{ fontSize: 20, color: '#000000', textAlign: 'center' }}> Press enter or return key to close </Text>
+            </View>
+          </HideableView>
+        </View>
       </View>
     );
   }
