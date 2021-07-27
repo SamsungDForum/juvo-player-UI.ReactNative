@@ -303,12 +303,11 @@ namespace PlayerService
         {
             async Task SuspendJob()
             {
-                _suspendTimeIndex = _player.Position ?? TimeSpan.Zero;
-                _playerEventSubscription.Dispose();
-                _playerEventSubscription = null;
-
                 try
                 {
+                    _suspendTimeIndex = _player.Position ?? TimeSpan.Zero;
+                    _playerEventSubscription.Dispose();
+                    _playerEventSubscription = null;
                     await _player.DisposeAsync();
                 }
                 catch (Exception ex)

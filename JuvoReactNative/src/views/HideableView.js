@@ -2,7 +2,16 @@
 import React, { Component, PropTypes } from 'react';
 import { View, Animated } from 'react-native';
 
+
 export default class HideableView extends Component {
+
+  static defaultProps =
+  {
+    duration: 500,
+    removeWhenHidden: false,
+    noAnimation: false,
+  };
+
   constructor(props) {
     super(props);
     this.state = {
@@ -15,37 +24,59 @@ export default class HideableView extends Component {
     Animated.timing(this.state.opacity, {
       toValue: show ? 1 : 0,
       duration: !this.props.noAnimation ? duration : 0
-    }).start();
+    })
+    .start(({ finished }) => {
+      console.debug(`HideableView.animate(): animation completed: ${finished}`);
+     });
   }
 
-  shouldComponentUpdate(nextProps) {
-    return true;
+  componentDidMount()
+  {
+    if(this.props.nameTag)
+      console.debug(`HideableView.componentDidMount(): done ${this.props.nameTag}`);
+  } 
+
+  componentWillUnmount()
+  {
+    delete this.state.opacity;
+    if(this.props.nameTag)
+      console.debug(`HideableView.componentWillUnmount(): done ${this.props.nameTag}`);
   }
 
-  componentWillUpdate(nextProps, nextState) {
-    if (this.props.visible !== nextProps.visible) {
-      this.animate(nextProps.visible);
+  render() 
+  {
+    try
+    {
+
+      if (this.props.removeWhenHidden && !this.visible) 
+      {
+        if(this.props.nameTag)
+          console.debug(`HideableView.render(): removing ${this.props.nameTag}`);
+
+        return null;
+      }
+
+      const useStyle=[ this.props.style, {opacity: this.state.opacity }];
+
+      if(this.props.nameTag)
+        console.debug(`HideableView.render(): done ${this.props.nameTag}`);
+       
+        //<View style={this.props.style}>       
+        //</View>
+      return (
+        <Animated.View style={useStyle}>{this.props.children}</Animated.View>
+      );
     }
-  }
-
-  render() {
-    if (this.props.removeWhenHidden) {
-      return this.visible && this.props.children;
+    catch(error)
+    {
+      console.error(`HidableView.render(): '${this.props.nameTag}' ${error}`);
     }
-
-    const width = this.props.width === undefined ? '100%' : this.props.width;
-    const height = this.props.height === undefined ? '100%' : this.props.height;
-
-    return (
-      <View style={{ position: this.props.position, width: width, height: height }}>
-        <Animated.View style={{ opacity: this.state.opacity }}>{this.props.children}</Animated.View>
-      </View>
-    );
   }
 }
 
 HideableView.propTypes = {
-  visible: PropTypes.bool.isRequired,
+
+  visible: PropTypes.bool,
   duration: PropTypes.number,
   removeWhenHidden: PropTypes.bool,
   noAnimation: PropTypes.bool

@@ -19,8 +19,8 @@
   },
   "jest": {},
   "config": {
-    "tvip": "192.168.137.4",
-    "mode": "Release"
+    "tvip": "192.168.0.20",
+    "mode": "Debug"
   },
   "dependencies": {
     "react": "^15.4.2",

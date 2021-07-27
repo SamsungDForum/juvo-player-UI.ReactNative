@@ -1,22 +1,54 @@
 'use strict';
 import React, { Component } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 
-export default class ContentDescription extends Component {
-  constructor(props) {
+export default class ContentDescription extends Component 
+{
+  constructor(props) 
+  {
     super(props);
   }
 
-  shouldComponentUpdate(nextProps, nextState) {
-    return true;
+  shouldComponentUpdate(nextProps, nextState)
+  {
+    const updateRequired =  nextProps.headerText != this.props.headerText ||
+                            nextProps.bodyText != this.props.bodyText;
+    console.debug(`ContentDescription.shouldComponentUpdate(): ${updateRequired}`);
+    return updateRequired;
   }
+
   render() {
-    this.handleSelectedIndexChange = this.props.onSelectedIndexChange;
+    const header = this.props.headerText;
+    const body = this.props.bodyText;
+
+    console.debug(`ContentDescription.render(): done`);
     return (
-      <View style={this.props.viewStyle}>
-        <Text style={this.props.headerStyle}>{this.props.headerText}</Text>
-        <Text style={this.props.bodyStyle}>{this.props.bodyText}</Text>
+      <View style={styles.contentDescription} >
+        <Text style={styles.contentHeader}>{header}</Text>
+        <Text style={styles.contentBody}>{body}</Text>
       </View>
     );
   }
 }
+
+const styles = StyleSheet.create({
+  contentDescription: {
+    position: 'absolute',
+    top: '10%',
+    left: '5%',
+    width: 900,
+    height: 750,
+    backgroundColor: 'transparent',
+  },
+  contentHeader: { 
+    fontSize: 60, 
+    color: '#ffffff', 
+    
+  },
+  contentBody: {
+    fontSize: 30,
+    color: '#ffffff',
+    top: 0,
+    //backgroundColor: 'transparent' 
+  }
+});

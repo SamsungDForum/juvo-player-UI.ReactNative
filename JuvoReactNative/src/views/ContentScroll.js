@@ -1,22 +1,26 @@
 'use strict';
-import React from 'react';
-import { View, Image, ScrollView, NativeModules, Dimensions, DeviceEventEmitter } from 'react-native';
+import React, {Component} from 'react';
+import { View, Image, ScrollView, NativeModules, DeviceEventEmitter } from 'react-native';
 
 import ContentPicture from './ContentPicture';
-import ContentDescription from './ContentDescription';
 import ResourceLoader from '../ResourceLoader';
 
-const width = Dimensions.get('window').width;
-const height = Dimensions.get('window').height;
 const itemWidth = 454;
 const itemHeight = 260;
 
-export default class ContentScroll extends React.Component {
-  constructor(props) {
+const overlayIcon = ResourceLoader.playbackIcons.play;
+
+export default class ContentScroll extends Component 
+{
+  constructor(props) 
+  {
     super(props);
-    this.selectedIndex = 0;
-    this.deepLinkIndex = 0;
-    this.numItems = this.props.contentURIs.length;
+    this.state = {
+      renderIndex: props.initialIndex,
+    },
+
+    this.selectedIndex = props.initialIndex;
+    this.numItems = ResourceLoader.clipsData.length;
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
     this.updateIndex = this.updateIndex.bind(this);
     this.JuvoPlayer = NativeModules.JuvoPlayer;
@@ -24,29 +28,40 @@ export default class ContentScroll extends React.Component {
 
   updateIndex(newIndex, animate = true)
   {
-    if(newIndex < 0 || newIndex >= this.numItems || newIndex == this.selectedIndex)
+    if(newIndex < 0 || newIndex >= this.numItems)// || newIndex == this.selectedIndex)
       return;
   
-    let scrolloffset = newIndex * itemWidth;
+    console.debug(`ContentScroll.updateIndex(): Index ${this.selectedIndex}->${newIndex} animate ${animate}`);
+    this.selectedIndex = newIndex;
+    const scrolloffset = newIndex * itemWidth;
     this._scrollView.scrollTo({ x: scrolloffset, y: 0, animated: animate });
     this.props.onSelectedIndexChange(newIndex);
-    this.selectedIndex = newIndex;
+    this.setState({renderIndex: newIndex});
   }
 
-  componentWillMount() {
+  componentWillMount() 
+  {
+    console.debug('ContentScroll.componentWillMount():');
+
     DeviceEventEmitter.addListener('ContentCatalog/onTVKeyDown', this.onTVKeyDown);
+
+    console.debug('ContentScroll.componentWillMount(): done');
   }
   
-  componentWillUnmount() {
+  componentWillUnmount() 
+  {
+    console.debug('ContentScroll.componentWillUnmount():');
+
     DeviceEventEmitter.removeListener('ContentCatalog/onTVKeyDown', this.onTVKeyDown);
+
+    console.debug('ContentScroll.componentWillUnmount(): done');
   }
 
-  componentWillReceiveProps(nextProps) {
-    if(this.deepLinkIndex == nextProps.deepLinkIndex)
-      return;
-
-    this.deepLinkIndex = nextProps.deepLinkIndex;    
-    this.updateIndex(nextProps.deepLinkIndex, false);
+  shouldComponentUpdate(nextProps, nextState)
+  {
+    const updateRequired = this.state.renderIndex != nextState.renderIndex;
+    console.debug(`ContentScroll.shouldComponentUpdate(): ${updateRequired}`);
+    return updateRequired;
   }
 
   onTVKeyDown(pressed) {
@@ -55,6 +70,7 @@ export default class ContentScroll extends React.Component {
     //params.KeyName
     //params.KeyCode
     
+    console.debug(`ContentScroll.onTVKeyDown(): ${pressed.KeyName}`);
     switch (pressed.KeyName) {
       case 'Right':
         this.updateIndex(this.selectedIndex + 1);
@@ -63,76 +79,72 @@ export default class ContentScroll extends React.Component {
       case 'Left':
         this.updateIndex(this.selectedIndex - 1);
         break;
+
+      default:
+        console.debug(`ContentScroll.onTVKeyDown(): done. key '${pressed.KeyName}' ignored`);
+        return;
     }
+
+    console.debug(`ContentScroll.onTVKeyDown(): done. key '${pressed.KeyName}' processed`);
   }
 
   render() {
-    const index = this.selectedIndex;
-    const title = ResourceLoader.clipsData[index].title;
-    const description = ResourceLoader.clipsData[index].description;
-    const overlayIcon = ResourceLoader.playbackIcons.play;
-    
-    const renderThumbs = (uri, i) => (
-      <View key={i}>
-        <Image resizeMode='cover' style={{ top: itemHeight / 2 + 35, left: itemWidth / 2 - 25 }} source={overlayIcon} />
-        <ContentPicture
-          myIndex={i}
-          selectedIndex={index}
-          path={uri}
-          width={itemWidth - 8}
-          height={itemHeight - 8}
-          top={4}
-          left={4}
-          fadeDuration={1}
-          stylesThumbSelected={{
-            width: itemWidth,
-            height: itemHeight,
-            backgroundColor: 'transparent',
-            opacity: 0.3
-          }}
-          stylesThumb={{
-            width: itemWidth,
-            height: itemHeight,
-            backgroundColor: 'transparent',
-            opacity: 1
-          }}
-        />
-      </View>
-    );
-    return (
-      <View style={{ height: height, width: width }}>
-        <View
-          style={{
-            top: '10%',
-            left: '5%',
-            width: 900,
-            height: 750
-          }}>
-          <ContentDescription
-            viewStyle={{
-              width: '100%',
-              height: '100%'
+
+    try
+    {
+      console.debug(`ContentScroll.render():`);
+
+      const index = this.state.renderIndex;
+      const uris = ResourceLoader.tilePaths;
+      const clipsData = ResourceLoader.clipsData;
+
+      const renderThumbs = (uri, i) => (
+        <View key={i}>
+          <Image resizeMode='cover' style={{ top: itemHeight / 2 + 35, left: itemWidth / 2 - 25 }} source={overlayIcon} />
+          <ContentPicture
+            myIndex={i}
+            selectedIndex={index}
+            path={uri}
+            width={itemWidth - 8}
+            height={itemHeight - 8}
+            top={4}
+            left={4}
+            fadeDuration={1}
+            stylesThumbSelected={{
+              width: itemWidth,
+              height: itemHeight,
+              backgroundColor: 'transparent',
+              opacity: 0.3
             }}
-            headerStyle={{ fontSize: 60, color: '#ffffff' }}
-            bodyStyle={{ fontSize: 30, color: '#ffffff', top: 0 }}
-            headerText={title}
-            bodyText={description}
+            stylesThumb={{
+              width: itemWidth,
+              height: itemHeight,
+              backgroundColor: 'transparent',
+              opacity: 1
+            }}
           />
         </View>
-        <View>
-          <ScrollView
-            scrollEnabled={false}
-            ref={scrollView => {
-              this._scrollView = scrollView;
-            }}
-            automaticallyAdjustContentInsets={false}
-            scrollEventThrottle={0}
-            horizontal={true}
-            showsHorizontalScrollIndicator={false}>
-            {this.props.contentURIs.map(renderThumbs)}
-          </ScrollView>
-        </View>
-      </View>
-    );
+      );
+
+      console.debug(`ContentScroll.render(): done. index '${index}' uri# '${uris.length} clips# '${clipsData.length}'`);
+
+      return (        
+        <ScrollView
+          style={this.props.style}
+          scrollEnabled={false}
+          ref={scrollView => {
+            this._scrollView = scrollView;
+          }}
+          automaticallyAdjustContentInsets={false}
+          scrollEventThrottle={0}
+          horizontal={true}
+          showsHorizontalScrollIndicator={false}>
+          {uris.map(renderThumbs)}
+        </ScrollView>
+      );
+    }
+    catch(error) {
+      console.error(`ContentScroll.render(): ERROR ${error}`);
+    }
   }
 }

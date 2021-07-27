@@ -98,6 +98,8 @@ namespace JuvoReactNative
         {
             Log.Debug(Tag, $"OnAppControlReceived()");
 
+            
+
             var payloadParser = new PayloadParser(e.ReceivedAppControl);
             if (payloadParser.TryGetUrl(out var url))
                 deepLinkReceivedSubject.OnNext(url);
