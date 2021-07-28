@@ -122,7 +122,6 @@ export default class RenderScene extends Component
 
     const targetEvent = targetView + '/onTVKeyDown';
     console.debug(`RenderScene.onTVKeyDown(): Routing key '${pressed.KeyName}' to '${targetEvent}'`);
-    console.debug(`RenderScene.onTVKeyDown(): ${typeof pressed} - ${Debug.stringify(pressed)}`);
     DeviceEventEmitter.emit(targetEvent, pressed);
   }
 
