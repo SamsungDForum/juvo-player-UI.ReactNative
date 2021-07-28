@@ -24,7 +24,7 @@ export default class PlaybackView extends Component
   {
     super(props);
     this.state = {playbackInfo: null};   
-
+    
     this.JuvoPlayer = NativeModules.JuvoPlayer;
     this.JuvoEventEmitter = new NativeEventEmitter(this.JuvoPlayer);
     
@@ -274,7 +274,7 @@ export default class PlaybackView extends Component
       case 'XF86AudioStop':
         const catalogView = RenderView.viewContentCatalog;
         catalogView.args = {selectedIndex: this.props.selectedIndex}
-        RenderScene.setScene(catalogView,RenderView.viewNone);
+        RenderScene.setScene(catalogView, RenderView.viewNone);
         break;
 
       case 'Up':
@@ -288,7 +288,18 @@ export default class PlaybackView extends Component
           // playback info with no auto hide + stream selection
           this.displayPlaybackInfo(false);
           const streamSelection = RenderView.viewStreamSelection;
-          const onHideStreamSelection = ()=>this.displayPlaybackInfo(true);
+          const onHideStreamSelection = ()=>
+          {
+            console.debug(`PlaybackView.onHideStreamSelection():`);
+            const currentScene = RenderScene.getScene();
+            if(currentScene.mainView.name != RenderView.viewPlayback.name)
+              console.log(`PlaybackView.onHideStreamSelection(): playback view removed. Nothing to hide`);
+            else
+              this.displayPlaybackInfo(true);
+              
+            console.debug(`PlaybackView.onHideStreamSelection(): done`);
+          };
+
           streamSelection.args = {onFadeOut: onHideStreamSelection};
           RenderScene.setScene(RenderView.viewCurrent,RenderView.viewStreamSelection);
         }

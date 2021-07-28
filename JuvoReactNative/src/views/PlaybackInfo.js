@@ -4,6 +4,7 @@ import { View, Image, NativeModules, Text, Dimensions, StyleSheet, ProgressBarAn
 import PropTypes from 'prop-types';
 import ResourceLoader from '../ResourceLoader';
 import FadableView from './FadableView';
+import { Debug } from '../ToolBox';
 
 const width = Dimensions.get('window').width;
 const height = Dimensions.get('window').height;
@@ -32,7 +33,7 @@ export default class PlaybackInfo extends Component
     this.state = {
       position: '00:00:00',
       duration: '00:00:00',
-      progress: 0.0,
+      progress: 0,
       isPlaying: false,
       hide: false,
     };
@@ -50,8 +51,11 @@ export default class PlaybackInfo extends Component
   {
     console.debug('PlaybackInfo.componentDidMount():');
   
-    this.onUpdatePlaybackInfo();
-    this.autoHideStartStop();
+    setImmediate(()=>
+    {
+      this.onUpdatePlaybackInfo();
+      this.autoHideStartStop();
+    });
 
     console.debug('PlaybackInfo.componentDidMount(): done');
   }
@@ -72,6 +76,18 @@ export default class PlaybackInfo extends Component
       this.hideTimeoutId = invalidTimeoutId;
     }
     console.debug('PlaybackInfo.componentWillUnmount(): done');
+  }
+
+  shouldComponentUpdate(nextProps, nextState)
+  {
+    const updateRequired = (  nextState.position != this.state.position || 
+              nextState.duration != this.state.duration ||
+              nextState.progress != this.state.progress || 
+              nextState.isPlaying != this.state.isPlaying ||
+              nextState.hide != this.state.hide ||
+              nextProps.autoHide != this.props.autoHide );
+
+    return updateRequired;
   }
 
   componentDidUpdate(prevProps, prevState) 
@@ -106,31 +122,17 @@ export default class PlaybackInfo extends Component
     try
     {
       this.updateTimeoutId = invalidTimeoutId;
-
-      if( this.state.hide )
-      {
-        console.debug('PlaybackInfo.onUpdatePlaybackInfo(): component is doomed! no update and reschedule.');
-        return;
-      }
-
       const infoBundle = await this.JuvoPlayer.GetPlaybackInfo();
       
-      if( infoBundle.position != this.state.position || infoBundle.duration != this.state.duration ||
-          infoBundle.progress != this.state.progress || infoBundle.isPlaying != this.state.isPlaying ) 
-      {
-        this.setState(
-          {
-            position: infoBundle.position, 
-            duration: infoBundle.duration,
-            progress: infoBundle.progress,
-            isPlaying: infoBundle.isPlaying,
-          });
-      }
+      this.setState(
+        {
+          position: infoBundle.position, 
+          duration: infoBundle.duration,
+          progress: infoBundle.progress,
+          isPlaying: infoBundle.isPlaying,
+        });
       
-      if( !this.state.hide )
-        this.updateTimeoutId = setTimeout( async ()=> await this.onUpdatePlaybackInfo(), updateTimeout );
-      else
-        console.debug('PlaybackInfo.onUpdatePlaybackInfo(): component is doomed! no reschedule.');
+      this.updateTimeoutId = setTimeout(this.onUpdatePlaybackInfo,updateTimeout);
     }
     catch(error)
     {
@@ -172,11 +174,10 @@ export default class PlaybackInfo extends Component
       const progress = this.state.progress / 100;
 
       const hide = this.state.hide;
-      const onHide = this.props.onFadeOut;
 
       console.debug(`PlaybackInfo.render(): done. autoHide '${this.props.autoHide}' hide '${hide}' playing '${this.state.isPlaying}' progress '${progress}' Position '${playbackPos}'->'${playbackDur}'`);
       return (
-        <FadableView style={styles.playbackInfo} duration={300} fadeAway={hide} onFadeOut={onHide} removeOnHide={false} > 
+        <FadableView style={styles.playbackInfo} duration={300} fadeAway={hide} onFadeOut={this.props.onFadeOut} removeOnHide={false} > 
        
           <View style={styles.contentDescriptionBox} >
             <Image resizeMode='contain' style={styles.settingsIcon} source={settingsIconPath} />
