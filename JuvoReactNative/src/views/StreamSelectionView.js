@@ -54,7 +54,6 @@ export default class StreamSelectionView extends React.Component {
       Audio: [],
       Video: [],
       Subtitle: [],
-      hideSelectionView: false,
     };
 
     this.JuvoPlayer = NativeModules.JuvoPlayer;
@@ -142,7 +141,7 @@ export default class StreamSelectionView extends React.Component {
 
     console.debug(`StreamSelectionView.onTVKeyDown(): ${pressed.KeyName} processed. XF86Back count ${this.XF86BackPressCount}`);
     if(this.XF86BackPressCount >= 2)
-      this.setState({hideSelectionView:true});
+      RenderScene.setScene(RenderView.viewCurrent,RenderView.viewNone);
   }
 
   async pickerChange(itemValue, itemPosition) 
@@ -150,7 +149,7 @@ export default class StreamSelectionView extends React.Component {
     //Apply the playback setttings to the playback
     try
     {
-      console.log(`StreamSelectionView.pickerChange(): selecting ${itemValue.Id}@${itemValue.StreamType}`);
+      console.log(`StreamSelectionView.pickerChange(): selecting ${itemValue.Id}@${Native.JuvoPlayer.Common.StreamType[itemValue.StreamType]}`);
       await this.JuvoPlayer.SetStream(itemValue.Id, itemValue.StreamType);
     }
     catch(error)
@@ -168,7 +167,7 @@ export default class StreamSelectionView extends React.Component {
       const videoStreams = this.state.Video;
       const subtitleStreams = this.state.Subtitle;
       
-      const hideView = this.state.hideSelectionView || this.props.fadeAway;
+      const hideView = this.props.fadeAway;
       console.debug(`StreamSelectionView.render(): done. fadeAway ${hideView}`);
 
       return (
