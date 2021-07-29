@@ -77,6 +77,8 @@ export default class RenderScene extends Component
     this.currentScene = this.currentScene.bind(this);
     this.removeHiddenViews = this.removeHiddenViews.bind(this);
 
+    this.displayScene = this.displayScene.bind(this);
+
     renderer.compose = this.compose;
     renderer.currentScene =  this.currentScene;
     renderer.removeHiddenViews = this.removeHiddenViews;
@@ -133,6 +135,16 @@ export default class RenderScene extends Component
     });
 
     return currentlyShowing;
+  }
+  
+  displayScene(scene)
+  {
+    // Run setState() outside of setScene() caller scope.
+    setImmediate((s)=>
+    {
+      this.setState(s)
+      console.debug(`RenderScene.displayScene(): done`);
+    },scene);
   }
 
   composeMain(view)
@@ -202,8 +214,7 @@ export default class RenderScene extends Component
         nextScene = {...nextScene, modal: modalViewComponent};
       }
 
-      this.setState( nextScene );
-
+      this.displayScene(nextScene);
       console.debug(`RenderScene.compose(): done\nmain:\n${Debug.stringify(this.mainView)}\nmodal:\n${Debug.stringify(this.modalView)}`);
     }
     catch(error)
@@ -226,7 +237,7 @@ export default class RenderScene extends Component
     if(removeMain)
       nextScene = {...nextScene, main: this.mainView.getComponent(this.mainView.args)};
     
-    this.setState(nextScene);
+    this.displayScene(nextScene);
 
     console.log(`RenderScene.removeHiddenViews(): done. removed main '${removeMain}' modal '${removeModal}'`);
   }
