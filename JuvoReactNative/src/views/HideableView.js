@@ -1,6 +1,6 @@
 'use strict';
 import React, { Component, PropTypes } from 'react';
-import { View, Animated } from 'react-native';
+import { Animated } from 'react-native';
 
 
 export default class HideableView extends Component {
@@ -61,11 +61,7 @@ export default class HideableView extends Component {
       if(this.props.nameTag)
         console.debug(`HideableView.render(): done ${this.props.nameTag}`);
        
-        //<View style={this.props.style}>       
-        //</View>
-      return (
-        <Animated.View style={useStyle}>{this.props.children}</Animated.View>
-      );
+      return ( <Animated.View style={useStyle}>{this.props.children}</Animated.View> );
     }
     catch(error)
     {
@@ -75,7 +71,6 @@ export default class HideableView extends Component {
 }
 
 HideableView.propTypes = {
-
   visible: PropTypes.bool,
   duration: PropTypes.number,
   removeWhenHidden: PropTypes.bool,

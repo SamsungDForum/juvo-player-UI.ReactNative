@@ -1,6 +1,6 @@
 'use strict';
 import React from 'react';
-import { View, Text, Picker, NativeModules, NativeEventEmitter, StyleSheet, DeviceEventEmitter,Dimensions } from 'react-native';
+import { View, Text, Picker, NativeModules, StyleSheet, DeviceEventEmitter,Dimensions } from 'react-native';
 import PropTypes from 'prop-types'
 
 import Native from '../Native';
@@ -77,6 +77,7 @@ export default class StreamSelectionView extends React.Component {
   componentDidMount() 
   {
     console.debug(`StreamSelectionView.componentDidMount():`);
+
     DeviceEventEmitter.addListener('StreamSelectionView/onTVKeyDown', this.onTVKeyDown);
     this.readStreamData();
 
@@ -86,7 +87,9 @@ export default class StreamSelectionView extends React.Component {
   componentWillUnmount()
   {
     console.debug(`StreamSelectionView.componentWillUnmount():`);
+    
     DeviceEventEmitter.removeAllListeners('StreamSelectionView/onTVKeyDown');
+    
     console.debug(`StreamSelectionView.componentWillUnmount(): done`);
   }
 
@@ -234,7 +237,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     opacity: 1
   },
-  
   textHeader: {
     fontSize: 30,
     color: 'white',

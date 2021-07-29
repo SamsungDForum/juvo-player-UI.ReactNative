@@ -4,7 +4,6 @@ import { Text, ActivityIndicator,StyleSheet, Dimensions} from 'react-native';
 import PropTypes from 'prop-types'
 
 import FadableView from './FadableView';
-import RenderScene, { RenderView } from './RenderScene';
 
 const width = Dimensions.get('window').width;
 const height = Dimensions.get('window').height;

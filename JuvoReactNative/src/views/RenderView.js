@@ -1,7 +1,6 @@
 'use strict';
-import React, { Component } from 'react';
+import React from 'react';
 
-import HideableView from './HideableView';
 import InProgressView from './InProgressView';
 import ContentCatalog from './ContentCatalog';
 import PlaybackView from './PlaybackView';
