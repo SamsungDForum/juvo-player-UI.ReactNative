@@ -30,7 +30,6 @@ using ElmSharp;
 using ReactNative.Modules.Core;
 using Newtonsoft.Json.Linq;
 using PlayerService;
-using ReactNative.JavaScriptCore;
 using Tizen.Applications;
 using UI.Common;
 
@@ -43,8 +42,6 @@ namespace JuvoReactNative
         private readonly SeekLogic _seekLogic = null; // needs to be initialized in the constructor!
         private EcoreEvent<EcoreKeyEventArgs> _keyDown;
 
-        // assumes StreamType values are sequential [0..N]
-        private readonly List<StreamDescription>[] _allStreamsDescriptions = new List<StreamDescription>[Enum.GetValues(typeof(StreamType)).Length];
         public IPlayerService Player { get; private set; }
         private IDisposable _seekCompletedSub;
         private IDisposable _playbackErrorsSub;
@@ -204,6 +201,13 @@ namespace JuvoReactNative
                 });
         }
 
+        private async Task<List<StreamDescription>> GetStreamTracks(StreamType streamType)
+        {
+            Logger.Info($"{streamType}");
+
+            return await Player.GetStreamsDescription(streamType);
+        }
+
         //////////////////JS methods//////////////////
         /// DO NOTE:
         /// All JS to Native calls are ASYNC!
@@ -212,76 +216,52 @@ namespace JuvoReactNative
         [ReactMethod]
         public async void GetStreamsDescription(int streamTypeIndex, IPromise promise)
         {
-            async Task<List<StreamDescription>> GetStreamsDescriptionInternal(int streamIndex, StreamType streamType)
+            using (LogScope.Create())
             {
-                Logger.Info($"{streamType}");
-
-                if (streamType == StreamType.Subtitle)
+                try
                 {
-                    _allStreamsDescriptions[streamIndex] = new List<StreamDescription>
-                    {
-                        new StreamDescription
-                        {
-                            Default = true,
-                            Description = "off",
-                            Id = "off",
-                            StreamType = streamType
-                        }
-                    };
+                    var streamType = (StreamType) streamTypeIndex;
+                    var streams = await GetStreamTracks(streamType).ConfigureAwait(false);
 
-                    _allStreamsDescriptions[streamIndex].AddRange(await Player.GetStreamsDescription(streamType));
+                    var streamLabel = streamType.ToString();
+                    var res = new JObject();
+                    res.Add(streamLabel, Newtonsoft.Json.JsonConvert.SerializeObject(streams));
+                    res.Add("streamLabel", streamLabel);
+
+                    promise.Resolve(res);
                 }
-                else
+                catch (Exception e)
                 {
-                    _allStreamsDescriptions[streamIndex] = await Player.GetStreamsDescription(streamType);
+                    promise.Reject(e.GetType().ToString(), e.Message);
+                    Logger.Error(e);
                 }
-
-                return _allStreamsDescriptions[streamIndex];
-            }
-
-            try
-            {
-                var streamType = (StreamType) streamTypeIndex;
-                var streams = await GetStreamsDescriptionInternal(streamTypeIndex, streamType)
-                    .ConfigureAwait(false);
-
-                var streamLabel = streamType.ToString();
-                var param = new JObject();
-                param.Add(streamLabel, Newtonsoft.Json.JsonConvert.SerializeObject(streams));
-                param.Add("streamTypeIndex", streamTypeIndex);
-                param.Add("streamLabel", streamLabel);
-                promise.Resolve(param);
-            }
-            catch (Exception e)
-            {
-                promise.Reject(e.GetType().ToString(),e.Message);
             }
         }
 
         [ReactMethod]
-        public async void SetStream(int selectionIndex, int streamTypeIndex, IPromise promise)
+        public async void SetStream(string trackId, int streamTypeIndex, IPromise promise)
         {
-            async Task<PlayerState> SetStreamInternal(StreamDescription targetStream)
+            using (LogScope.Create())
             {
-                if (targetStream.StreamType == StreamType.Subtitle && targetStream.Id == "off")
-                    Player.DeactivateStream(StreamType.Subtitle);
-                else
-                    await Player.ChangeActiveStream(targetStream);
+                try
+                {
+                    var streamType = (StreamType) streamTypeIndex;
+                    var tracks = await GetStreamTracks(streamType).ConfigureAwait(false);
+                    var track = tracks.FirstOrDefault(trackEntry => trackEntry.Id == trackId);
+                    if (track == default)
+                    {
+                        promise.Reject("Not available", "Track is no longer available for seleciton");
+                        return;
+                    }
 
-                return Player.State;
-            }
-
-            try
-            {
-                var playerState = _allStreamsDescriptions[streamTypeIndex] != null && selectionIndex != -1
-                    ? await SetStreamInternal(_allStreamsDescriptions[streamTypeIndex][selectionIndex]).ConfigureAwait(false)
-                    : Player.State;
-
-                promise.Resolve(playerState.ToString());
-            }
-            catch (Exception e)
-            {
-                promise.Reject(e.GetType().ToString(), e.Message);
+                    await Player.ChangeActiveStream(track).ConfigureAwait(false);
+                    promise.Resolve(Player.State.ToString());
+                }
+                catch (Exception e)
+                {
+                    promise.Reject(e.GetType().ToString(), e.Message);
+                    Logger.Error(e);
+                }
             }
         }
 

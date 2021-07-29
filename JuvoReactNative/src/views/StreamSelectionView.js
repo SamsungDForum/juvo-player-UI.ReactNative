@@ -149,8 +149,9 @@ export default class StreamSelectionView extends React.Component {
     //Apply the playback setttings to the playback
     try
     {
-      console.log(`StreamSelectionView.pickerChange(): selecting ${itemValue.Id}@${Native.JuvoPlayer.Common.StreamType[itemValue.StreamType]}`);
+      console.log(`StreamSelectionView.pickerChange(): selecting stream ${itemValue.Id} ${itemValue.Description}`);
       await this.JuvoPlayer.SetStream(itemValue.Id, itemValue.StreamType);
+      console.log(`StreamSelectionView.pickerChange(): done`);
     }
     catch(error)
     {

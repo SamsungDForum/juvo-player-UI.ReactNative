@@ -175,7 +175,7 @@ export default class PlaybackInfo extends Component
 
       const hide = this.state.hide;
 
-      console.debug(`PlaybackInfo.render(): done. autoHide '${this.props.autoHide}' hide '${hide}' playing '${this.state.isPlaying}' progress '${progress}' Position '${playbackPos}'->'${playbackDur}'`);
+      console.debug(`PlaybackInfo.render(): done. autoHide '${this.props.autoHide}' hide '${hide}' playing '${this.state.isPlaying}' progress '${progress}' Position-Duration '${playbackPos}'-'${playbackDur}'`);
       return (
         <FadableView style={styles.playbackInfo} duration={300} fadeAway={hide} onFadeOut={this.props.onFadeOut} removeOnHide={false} > 
        
@@ -203,6 +203,13 @@ export default class PlaybackInfo extends Component
     }
   }
 }
+
+PlaybackInfo.propTypes = {
+  autoHide: PropTypes.bool,
+  onHide: PropTypes.func,
+  selectedIndex: PropTypes.number.isRequired,
+};
+
 const styles = StyleSheet.create({
   playbackInfo: {
     position: 'absolute',
