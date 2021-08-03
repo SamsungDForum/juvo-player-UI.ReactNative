@@ -27,13 +27,13 @@ export default class NotificationPopup extends Component
   componentDidMount() 
   {
     DeviceEventEmitter.addListener('NotificationPopup/onTVKeyDown', this.onTVKeyDown);
-    console.debug(`NotificationPopup.componentDidMount(): done`);
+    console.debug('NotificationPopup.componentDidMount(): done');
   }
 
   componentWillUnmount() 
   { 
     DeviceEventEmitter.removeAllListeners('NotificationPopup/onTVKeyDown'); 
-    console.debug(`NotificationPopup.componentWillUnmount(): done`);
+    console.debug('NotificationPopup.componentWillUnmount(): done');
   }
   
   onTVKeyDown(pressed) {

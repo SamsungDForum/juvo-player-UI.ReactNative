@@ -13,7 +13,7 @@ import RenderView from './RenderView';
 
 const width = Dimensions.get('window').width;
 const height = Dimensions.get('window').height;
-const debounceCompleted = -1;
+const invalidTimeoutId = -1;
 const debounceTimeout = 200; // 200ms idle timeout
 const overlayUri = ResourceLoader.contentDescriptionBackground;
 
@@ -28,13 +28,12 @@ export default class ContentCatalog extends Component
       renderBackground: true,
     };
 
-    this.showBackground = true;
-
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
     this.handleSelectedIndexChange = this.handleSelectedIndexChange.bind(this);
     this.JuvoPlayer = NativeModules.JuvoPlayer;
     this.onIndexChangeDebounceCompleted = this.onIndexChangeDebounceCompleted.bind(this);
-    this.debounceIndexChange = debounceCompleted;
+    
+    this.debounceIndexChangeTimeoutId = invalidTimeoutId;
     this.candidateIndex = props.selectedIndex;
   }
   
@@ -65,10 +64,10 @@ export default class ContentCatalog extends Component
     switch (pressed.KeyName) 
     {
       case 'Return':
-        if(this.debounceIndexChange != debounceCompleted) 
+        if(this.debounceIndexChangeTimeoutId != invalidTimeoutId) 
         {
-          clearTimeout(this.debounceIndexChange);
-          this.debounceIndexChange = debounceCompleted;
+          clearTimeout(this.debounceIndexChangeTimeoutId);
+          this.debounceIndexChangeTimeoutId = invalidTimeoutId;
         }
         
         // Use candidate rather then selected index.
@@ -100,7 +99,7 @@ export default class ContentCatalog extends Component
   {
     console.debug(`ContentCatalog.onIndexChangeDebounceCompleted():`);
 
-    this.debounceIndexChange = debounceCompleted;
+    this.debounceIndexChangeTimeoutId = invalidTimeoutId;
     const newIndex = this.candidateIndex;
  
     this.setState({
@@ -114,21 +113,21 @@ export default class ContentCatalog extends Component
   {
     console.debug('ContentCatalog.handleSelectedIndexChange():');
     
-    if(this.debounceIndexChange != debounceCompleted)
+    if(this.debounceIndexChangeTimeoutId != invalidTimeoutId)
     {
-      clearTimeout(this.debounceIndexChange);
-      this.debounceIndexChange = debounceCompleted;
+      clearTimeout(this.debounceIndexChangeTimeoutId);
+      this.debounceIndexChangeTimeoutId = invalidTimeoutId;
     }
     
     this.candidateIndex = index;
    
-    if(this.state.showBackground)
+    if(this.state.renderBackground)
     {
       console.debug('ContentCatalog.handleSelectedIndexChange(): Hiding big pic');
-      this.setState({showBackground: false});
+      this.setState({renderBackground: false});
     }
 
-    this.debounceIndexChange = setTimeout(this.onIndexChangeDebounceCompleted, debounceTimeout);
+    this.debounceIndexChangeTimeoutId = setTimeout(this.onIndexChangeDebounceCompleted, debounceTimeout);
   }
 
   render() {

@@ -63,9 +63,9 @@ export default class StreamSelectionView extends React.Component {
     this.pickerChange = this.pickerChange.bind(this);
     this.readStreamData = this.readStreamData.bind(this);
     
-    this.streamsPromis = (()=> 
+    this.streamsPromise = (()=> 
     {
-      console.debug(`StreamSelectionView.constructor(): quering available streams`);
+      console.debug('StreamSelectionView.constructor(): quering available streams');
 
       return Promise.all([
         this.JuvoPlayer.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Audio),
@@ -76,29 +76,29 @@ export default class StreamSelectionView extends React.Component {
 
   componentDidMount() 
   {
-    console.debug(`StreamSelectionView.componentDidMount():`);
+    console.debug('StreamSelectionView.componentDidMount():');
 
     DeviceEventEmitter.addListener('StreamSelectionView/onTVKeyDown', this.onTVKeyDown);
     this.readStreamData();
 
-    console.debug(`StreamSelectionView.componentDidMount(): done`);
+    console.debug('StreamSelectionView.componentDidMount(): done');
   }
 
   componentWillUnmount()
   {
-    console.debug(`StreamSelectionView.componentWillUnmount():`);
+    console.debug('StreamSelectionView.componentWillUnmount():');
     
     DeviceEventEmitter.removeAllListeners('StreamSelectionView/onTVKeyDown');
     
-    console.debug(`StreamSelectionView.componentWillUnmount(): done`);
+    console.debug('StreamSelectionView.componentWillUnmount(): done');
   }
 
   async readStreamData()
   {
     try
     {
-      console.debug(`StreamSelectionView.readStreamData():`);
-      const dataSource = await this.streamsPromis;
+      console.debug('StreamSelectionView.readStreamData():');
+      const dataSource = await this.streamsPromise;
       const streams = {
         Audio: [],
         Video: [],
@@ -115,7 +115,7 @@ export default class StreamSelectionView extends React.Component {
        });
       
       this.setState(streams);
-      console.debug(`StreamSelectionView.readStreamData(): done`);
+      console.debug('StreamSelectionView.readStreamData(): done');
     }
     catch(error)
     {
@@ -154,11 +154,11 @@ export default class StreamSelectionView extends React.Component {
     {
       console.log(`StreamSelectionView.pickerChange(): selecting stream ${itemValue.Id} ${itemValue.Description}`);
       await this.JuvoPlayer.SetStream(itemValue.Id, itemValue.StreamType);
-      console.log(`StreamSelectionView.pickerChange(): done`);
+      console.log('StreamSelectionView.pickerChange(): done');
     }
     catch(error)
     {
-      console.error(`StreamSelectionView.pickerChange(): failed to select strean`);
+      console.error('StreamSelectionView.pickerChange(): failed to select strean');
     }
   }
 

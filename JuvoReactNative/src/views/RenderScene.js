@@ -69,7 +69,7 @@ export default class RenderScene extends Component
     };
 
     this.JuvoPlayer = NativeModules.JuvoPlayer;
-    this.JuvoEventEmitter = new NativeEventEmitter(this.JuvoPlayer);
+    this.JuvoEventEmitter = null;
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
     this.compose = this.compose.bind(this);
     this.composeMain = this.composeMain.bind(this);
@@ -88,6 +88,7 @@ export default class RenderScene extends Component
 
   componentDidMount()
   {
+    this.JuvoEventEmitter = new NativeEventEmitter(this.JuvoPlayer);
     this.JuvoEventEmitter.addListener("onTVKeyDown", this.onTVKeyDown);
     console.debug('RenderScene.componentDidMount(): done');
   }
@@ -143,7 +144,7 @@ export default class RenderScene extends Component
     setImmediate((s)=>
     {
       this.setState(s)
-      console.debug(`RenderScene.displayScene(): done`);
+      console.debug('RenderScene.displayScene(): done');
     },scene);
   }
 
@@ -151,7 +152,7 @@ export default class RenderScene extends Component
   {
     if( view.name == RenderView.viewNone.name && this.mainView.name == RenderView.viewNone.name)
     {
-      console.debug(`RenderScene.composeMain(): no update`);
+      console.debug('RenderScene.composeMain(): no update');
       return null;
     }
 
@@ -165,7 +166,7 @@ export default class RenderScene extends Component
   {
     if( view.name == RenderView.viewNone.name && this.modalView.name == RenderView.viewNone.name)
     {
-      console.debug(`RenderScene.composeModal(): no update`);
+      console.debug('RenderScene.composeModal(): no update');
       return null;
     }
 
@@ -191,7 +192,7 @@ export default class RenderScene extends Component
     }
 
     this.modalView = view;
-    console.debug(`RenderScene.composeModal(): updated`);
+    console.debug('RenderScene.composeModal(): updated');
     return modalComponent;
   }
 
@@ -225,7 +226,7 @@ export default class RenderScene extends Component
 
   removeHiddenViews()
   {
-    console.debug(`RenderScene.removeHiddenViews():`);
+    console.debug('RenderScene.removeHiddenViews():');
     const removeModal = this.state.modal != null && this.modalView.name == RenderView.viewNone.name;
     const removeMain = this.state.main != null && this.mainView.name == RenderView.viewNone.name;
     
@@ -246,7 +247,7 @@ export default class RenderScene extends Component
   {
     try
     {
-      console.debug(`RenderScene.render():`);
+      console.debug('RenderScene.render():');
 
       const renderMain = this.state.main;
       const renderModal = this.state.modal;

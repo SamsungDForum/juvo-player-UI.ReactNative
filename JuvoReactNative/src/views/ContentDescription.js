@@ -21,7 +21,7 @@ export default class ContentDescription extends Component
     const header = this.props.headerText;
     const body = this.props.bodyText;
 
-    console.debug(`ContentDescription.render(): done`);
+    console.debug('ContentDescription.render(): done');
     return (
       <View style={styles.contentDescription} >
         <Text style={styles.contentHeader}>{header}</Text>
@@ -49,6 +49,5 @@ const styles = StyleSheet.create({
     fontSize: 30,
     color: '#ffffff',
     top: 0,
-    //backgroundColor: 'transparent' 
   }
 });

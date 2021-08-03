@@ -46,17 +46,17 @@ export default class FadableView extends Component
 
   componentWillUnmount()
   {
-    if( this.props.nameTag )
+    if(this.props.nameTag)
       console.debug(`FadableView.componentWillUnmount(): ${this.props.nameTag}`);
     
     // terminating running animation will invoke provided handlers.
-    if( this.runningAnimation )
+    if(this.runningAnimation)
       this.runningAnimation.stop();
 
-    if( this.duration > 0)
+    if(this.duration > 0)
       delete this.state.fadeAnim;
     
-    if( this.props.nameTag )
+    if(this.props.nameTag)
       console.debug(`FadableView.componentWillUnmount(): ${this.props.nameTag} done`);
   }
 
@@ -108,6 +108,7 @@ export default class FadableView extends Component
     if(this.runningAnimation)
     {
       this.runningAnimation.stop();
+      this.runningAnimation = null;
       console.log(`FadableView.fade(): '${this.props.nameTag&&this.props.nameTag}' running animation stopped.`);
     }
 
@@ -115,16 +116,16 @@ export default class FadableView extends Component
       ? `FadableView.fade(): ${this.props.nameTag} -> opacity '${target}' @'${speed}' ms`
       : null;
 
-    if( logTag )
+    if(logTag)
       console.debug(logTag);
 
-    if( speed > 0) 
+    if(speed > 0) 
     {
       this.runningAnimation = Animated.timing(this.state.fadeAnim, {toValue: target, duration: speed});
       this.runningAnimation.start(({finished}) =>
       {
         this.runningAnimation = null;
-        if( logTag )
+        if(logTag)
           console.debug(`${logTag} animation completed '${finished}'`);
         
         this.onFadeComplete(onComplete,removeWhenCompleted);
@@ -134,13 +135,13 @@ export default class FadableView extends Component
     {
       this.setState({fadeAnim: target});
 
-      if( logTag )
+      if(logTag)
         console.debug(`${logTag} no animation`);
       
       this.onFadeComplete(onComplete,removeWhenCompleted);
     }
 
-    if( logTag )
+    if(logTag)
       console.debug(`${logTag} done`);
   }
   
@@ -163,7 +164,7 @@ export default class FadableView extends Component
     {
       const useStyle=[ this.props.style, {opacity: this.state.fadeAnim }];
 
-      if ( this.props.nameTag )
+      if (this.props.nameTag)
         console.debug(`FadableView.render(): ${this.props.nameTag} done. fadeAway '${this.props.fadeAway}'`);
 
       return ( <Animated.View style={useStyle}>{this.props.children}</Animated.View> );

@@ -26,7 +26,7 @@ export default class PlaybackView extends Component
     this.state = {playbackInfo: null};   
     
     this.JuvoPlayer = NativeModules.JuvoPlayer;
-    this.JuvoEventEmitter = new NativeEventEmitter(this.JuvoPlayer);
+    this.JuvoEventEmitter = null;
     
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
 
@@ -45,8 +45,8 @@ export default class PlaybackView extends Component
 
   componentDidMount()
   {
-    console.debug(`PlaybackView.componentDidMount():`);
-
+    console.debug('PlaybackView.componentDidMount():');
+    this.JuvoEventEmitter = new NativeEventEmitter(this.JuvoPlayer);
     // NativeEventEmitter events do not seem to be synchronised with JS event loop.
     // Run handlers via setImmediate() to get them more syncish.
     this.JuvoEventEmitter.addListener('onUpdateBufferingProgress', (p) => setImmediate( this.onUpdateBufferingProgress, p ) );
@@ -60,12 +60,12 @@ export default class PlaybackView extends Component
     // Start playback outside of component lifecycle.
     setImmediate( async ()=> await this.startPlayback() );
 
-    console.debug(`PlaybackView.componentDidMount(): done`);
+    console.debug('PlaybackView.componentDidMount(): done');
   }
 
   async componentWillUnmount() 
   {
-    console.debug(`PlaybackView.componentWillUnmount():`);
+    console.debug('PlaybackView.componentWillUnmount():');
 
     DeviceEventEmitter.removeAllListeners('PlaybackView/onTVKeyDown');
     this.JuvoEventEmitter.removeAllListeners('onUpdateBufferingProgress');
@@ -76,14 +76,14 @@ export default class PlaybackView extends Component
 
     await this.JuvoPlayer.StopPlayback();
     
-    console.debug(`PlaybackView.componentWillUnmount(): done`);
+    console.debug('PlaybackView.componentWillUnmount(): done');
   }
 
   async startPlayback()
   {
     try
     {
-      console.log(`PlaybackView.startPlayback():`);
+      console.log('PlaybackView.startPlayback():');
 
       const video = ResourceLoader.clipsData[this.props.selectedIndex];
       const DRM = video.drmDatas ? JSON.stringify(video.drmDatas) : null;
@@ -92,7 +92,7 @@ export default class PlaybackView extends Component
       this.displayPlaybackInfo(true);
       RenderScene.setScene(RenderView.viewCurrent, RenderView.viewNone);
 
-      console.log(`PlaybackView.startPlayback(): done`);
+      console.log('PlaybackView.startPlayback(): done');
     }
     catch(error)
     {
@@ -112,13 +112,13 @@ export default class PlaybackView extends Component
       seekingView.args = {messageText: 'Seeking'};
 
       RenderScene.setScene(RenderView.viewCurrent,seekingView);
-      console.log(`PlaybackView.handleSeek(): Seek in progress`);
+      console.log('PlaybackView.handleSeek(): Seek in progress');
     }
   }
 
   onSeekCompleted() 
   {
-    console.debug(`PlaybackView.onSeekCompleted():`);
+    console.debug('PlaybackView.onSeekCompleted():');
 
     // enable auto hide on playback info.
     this.displayPlaybackInfo(true);
@@ -128,35 +128,35 @@ export default class PlaybackView extends Component
     if(current.modalView.name == RenderView.viewInProgress.name)
       RenderScene.setScene(RenderView.viewCurrent, RenderView.viewNone);
 
-    console.log(`PlaybackView.onSeekCompleted(): done. Seek completed`);
+    console.log('PlaybackView.onSeekCompleted(): done. Seek completed');
   }
 
   handleForwardKey() 
   {
-    console.debug(`PlaybackView.handleForwardKey():`);
+    console.debug('PlaybackView.handleForwardKey():');
     this.handleSeek();
     this.JuvoPlayer.Forward();
-    console.debug(`PlaybackView.handleForwardKey(): done`);
+    console.debug('PlaybackView.handleForwardKey(): done');
   }
 
    handleRewindKey() 
   {
-    console.debug(`PlaybackView.handleRewindKey():`);
+    console.debug('PlaybackView.handleRewindKey():');
     this.handleSeek();
     this.JuvoPlayer.Rewind();
-    console.debug(`PlaybackView.handleRewindKey(): done`);
+    console.debug('PlaybackView.handleRewindKey(): done');
   }
 
   removePlaybackInfo()
   {
-    console.debug(`PlaybackView.removePlaybackInfo():`);
+    console.debug('PlaybackView.removePlaybackInfo():');
     this.setState({playbackInfo: null});
-    console.log(`PlaybackView.removePlaybackInfo(): done`);
+    console.log('PlaybackView.removePlaybackInfo(): done');
   }
 
   displayPlaybackInfo(autoHide)
   {
-    console.debug(`PlaybackView.displayPlaybackInfo():`);
+    console.debug('PlaybackView.displayPlaybackInfo():');
 
     const infoView = ShowPlaybackInfo({
       selectedIndex: this.props.selectedIndex,
@@ -208,7 +208,7 @@ export default class PlaybackView extends Component
       RenderScene.setScene(catalogView, errorView);
     }
 
-    console.error(`PlaybackView.onPlaybackError(): done'`);
+    console.error('PlaybackView.onPlaybackError(): done');
   }
 
   onEndOfStream(_) 
@@ -290,14 +290,14 @@ export default class PlaybackView extends Component
           const streamSelection = RenderView.viewStreamSelection;
           const onHideStreamSelection = ()=>
           {
-            console.debug(`PlaybackView.onHideStreamSelection():`);
+            console.debug('PlaybackView.onHideStreamSelection():');
             const currentScene = RenderScene.getScene();
             if(currentScene.mainView.name != RenderView.viewPlayback.name)
-              console.log(`PlaybackView.onHideStreamSelection(): playback view removed. Nothing to hide`);
+              console.log('PlaybackView.onHideStreamSelection(): playback view removed. Nothing to hide');
             else
               this.displayPlaybackInfo(true);
               
-            console.debug(`PlaybackView.onHideStreamSelection(): done`);
+            console.debug('PlaybackView.onHideStreamSelection(): done');
           };
 
           streamSelection.args = {onFadeOut: onHideStreamSelection};

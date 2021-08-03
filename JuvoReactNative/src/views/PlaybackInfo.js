@@ -98,7 +98,7 @@ export default class PlaybackInfo extends Component
   
   autoHideStartStop()
   {
-    console.debug(`PlaybackInfo.autoHideStartStop():`);
+    console.debug('PlaybackInfo.autoHideStartStop():');
 
     if(this.hideTimeoutId != invalidTimeoutId)
     {
@@ -113,7 +113,7 @@ export default class PlaybackInfo extends Component
     }
     else
     {
-      console.log(`PlaybackInfo.autoHideStartStop(): done. hide timeout cleared.`);
+      console.log('PlaybackInfo.autoHideStartStop(): done. hide timeout cleared');
     } 
   }
 
@@ -142,7 +142,7 @@ export default class PlaybackInfo extends Component
 
   onAutoHide()
   {
-    console.debug(`PlaybackInfo.onAutoHide():`);
+    console.debug('PlaybackInfo.onAutoHide():');
     this.hideTimeoutId = invalidTimeoutId;
 
     if(this.updateTimeoutId != invalidTimeoutId)
@@ -155,7 +155,7 @@ export default class PlaybackInfo extends Component
       console.warn(`PlaybackInfo.onAutoHide(): onFadeOut not provided. Component will just 'hide'. not a happy scenario...`);
     
     this.setState({hide: true});
-    console.debug(`PlaybackInfo.onAutoHide(): done`);
+    console.debug('PlaybackInfo.onAutoHide(): done');
   }
 
   render()

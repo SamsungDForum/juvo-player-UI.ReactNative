@@ -28,7 +28,7 @@ export default class ContentScroll extends Component
 
   updateIndex(newIndex, animate = true)
   {
-    if(newIndex < 0 || newIndex >= this.numItems)// || newIndex == this.selectedIndex)
+    if(newIndex < 0 || newIndex >= this.numItems)
       return;
   
     console.debug(`ContentScroll.updateIndex(): Index ${this.selectedIndex}->${newIndex} animate ${animate}`);
@@ -92,7 +92,7 @@ export default class ContentScroll extends Component
 
     try
     {
-      console.debug(`ContentScroll.render():`);
+      console.debug('ContentScroll.render():');
 
       const index = this.state.renderIndex;
       const uris = ResourceLoader.tilePaths;

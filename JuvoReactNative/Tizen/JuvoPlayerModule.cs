@@ -39,7 +39,7 @@ namespace JuvoReactNative
     {
         private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
 
-        private readonly SeekLogic _seekLogic = null; // needs to be initialized in the constructor!
+        private readonly SeekLogic _seekLogic;
         private EcoreEvent<EcoreKeyEventArgs> _keyDown;
 
         public IPlayerService Player { get; private set; }
@@ -250,7 +250,7 @@ namespace JuvoReactNative
                     var track = tracks.FirstOrDefault(trackEntry => trackEntry.Id == trackId);
                     if (track == default)
                     {
-                        promise.Reject("Not available", "Track is no longer available for seleciton");
+                        promise.Reject("Not available", "Track is no longer available for selection");
                         return;
                     }
 
@@ -330,7 +330,7 @@ namespace JuvoReactNative
                     Logger.Warn(e.Message);
                 }
 
-                // Don't pass "failed/sucess" to JS. Promise is to allow JS to wait for invokation completion.
+                // Don't pass "failed/sucess" to JS. Promise is to allow JS to wait for inocation completion.
                 promise.Resolve(default);
             }
         }

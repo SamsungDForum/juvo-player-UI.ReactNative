@@ -30,7 +30,7 @@ export default class JuvoReactNative extends Component
     super(props);
     this.selectedClipIndex = 0;
     this.JuvoPlayer = NativeModules.JuvoPlayer;
-    this.JuvoEventEmitter = new NativeEventEmitter(this.JuvoPlayer);
+    this.JuvoEventEmitter = null;
     this.handleDeepLink = this.handleDeepLink.bind(this);
     this.finishLoading = this.finishLoading.bind(this);
     this.loadingPromise = ResourceLoader.load();
@@ -40,7 +40,7 @@ export default class JuvoReactNative extends Component
 
   componentDidMount() {
     console.debug('JuvoReactNative.componentDidMount():');
-    
+    this.JuvoEventEmitter = new NativeEventEmitter(this.JuvoPlayer);
     this.JuvoEventEmitter.addListener('handleDeepLink', async (deepLink) => await this.handleDeepLink(deepLink));
     this.JuvoPlayer.AttachDeepLinkListener();
     
@@ -99,18 +99,18 @@ export default class JuvoReactNative extends Component
     playbackView.args = {selectedIndex:index};
 
     const inProgressView = RenderView.viewInProgress;
-    inProgressView.args = {messageText: 'Starting deep link'}
+    inProgressView.args = {messageText: `Starting '${ResourceLoader.clipsData[index].title}'`};
 
     RenderScene.setScene(playbackView, inProgressView);
   
-    console.log(`JuvoReactNative.handleDeepLink(): done.`);
+    console.log('JuvoReactNative.handleDeepLink(): done.');
   }
   
   render()
   {
     try
     {
-      console.debug(`JuvoReactNative.render(): done`);
+      console.debug('JuvoReactNative.render(): done');
       return ( <RenderScene initialScene={initialScene}/> );
     }
     catch(error)
