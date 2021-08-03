@@ -18,6 +18,14 @@ const ffwIconPath = ResourceLoader.playbackIcons.ffw;
 const playIconPath = ResourceLoader.playbackIcons.play;
 const pauseIconPath = ResourceLoader.playbackIcons.pause;
 
+function toHHMMSS(totalSec)
+{
+  const dateSeconds = new Date(1970,1,null,0,0,0,0);
+  dateSeconds.setSeconds(totalSec,0);
+
+  return dateSeconds.toTimeString().replace(/.*(\d{2}:\d{2}:\d{2}).*/, '$1');
+}
+
 export default class PlaybackInfo extends Component 
 {
   static defaultProps =
@@ -31,9 +39,8 @@ export default class PlaybackInfo extends Component
   {
     super(props);
     this.state = {
-      position: '00:00:00',
-      duration: '00:00:00',
-      progress: 0,
+      position: 0,
+      duration: 0,
       isPlaying: false,
       hide: false,
     };
@@ -82,7 +89,6 @@ export default class PlaybackInfo extends Component
   {
     const updateRequired = (  nextState.position != this.state.position || 
               nextState.duration != this.state.duration ||
-              nextState.progress != this.state.progress || 
               nextState.isPlaying != this.state.isPlaying ||
               nextState.hide != this.state.hide ||
               nextProps.autoHide != this.props.autoHide );
@@ -128,7 +134,6 @@ export default class PlaybackInfo extends Component
         {
           position: infoBundle.position, 
           duration: infoBundle.duration,
-          progress: infoBundle.progress,
           isPlaying: infoBundle.isPlaying,
         });
       
@@ -163,19 +168,16 @@ export default class PlaybackInfo extends Component
     try
     {
       console.debug('PlaybackInfo.render():');
-    
-      const isPlaying = this.state.isPlaying;
       
-      const index = this.props.selectedIndex;
-      const title = ResourceLoader.clipsData[index].title;
-
-      const playbackPos = this.state.position;
-      const playbackDur = this.state.duration;
-      const progress = this.state.progress / 100;
+      const isPlaying = this.state.isPlaying;
+      const title = ResourceLoader.clipsData[this.props.selectedIndex].title;
+      const playbackPos = toHHMMSS(this.state.position);
+      const playbackDur = toHHMMSS(this.state.duration);
+      const progress = this.state.duration > 0 ? this.state.position / this.state.duration : 0;
 
       const hide = this.state.hide;
 
-      console.debug(`PlaybackInfo.render(): done. autoHide '${this.props.autoHide}' hide '${hide}' playing '${this.state.isPlaying}' progress '${progress}' Position-Duration '${playbackPos}'-'${playbackDur}'`);
+      console.debug(`PlaybackInfo.render(): done. autoHide '${this.props.autoHide}' hide '${hide}' playing '${isPlaying}' progress '${progress}' Position-Duration '${playbackPos}'-'${playbackDur}'`);
       return (
         <FadableView style={styles.playbackInfo} duration={300} fadeAway={hide} onFadeOut={this.props.onFadeOut} removeOnHide={false} > 
        

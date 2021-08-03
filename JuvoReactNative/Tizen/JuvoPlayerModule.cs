@@ -412,16 +412,14 @@ namespace JuvoReactNative
         {
             try
             {
-                var position = _seekLogic.CurrentPositionUI;
-                var duration = _seekLogic.Duration;
-                var progress = (int)((position / duration) * 100);
+                var position = (int)_seekLogic.CurrentPositionUI.TotalSeconds;
+                var duration = (int)_seekLogic.Duration.TotalSeconds;
                 var isPlaying = Player.State == PlayerState.Playing;
 
                 promise.Resolve(new JObject
                 {
-                    {"position", position.ToString(@"hh\:mm\:ss")},
-                    {"duration", duration.ToString(@"hh\:mm\:ss")},
-                    {"progress", progress},
+                    {"position", position},
+                    {"duration", duration},
                     {"isPlaying", isPlaying}
                 });
             }
@@ -431,13 +429,10 @@ namespace JuvoReactNative
                 // Don't penalise such use case, just inform. Decouples "current state" dependency from UI.
                 Logger.Warn(e.Message);
 
-                var zeroTimeIndex = TimeSpan.Zero.ToString(@"hh\:mm\:ss");
-
                 promise.Resolve(new JObject
                 {
-                    {"position", zeroTimeIndex},
-                    {"duration", zeroTimeIndex},
-                    {"progress", 0},
+                    {"position", 0},
+                    {"duration", 0},
                     {"isPlaying", false}
                 });
             }
