@@ -14,7 +14,7 @@
     <DebugType>None</DebugType>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|tizen60|AnyCPU'">
-    <DefineConstants>TRACE;DEBUG</DefineConstants>
+    <DefineConstants>TRACE;DEBUG;DEBUGJS</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="lib\**" />
