@@ -150,7 +150,7 @@ export default class ContentCatalog extends Component
           <Image source={remoteUri} style={styles.backgroundPicture} resizeMode='cover' opacity={isBigPicVisible?1:0} fadeDuration={100}/>
           <Image source={overlayUri} style={styles.foregroundPicture} resizeMode='cover' />
           <ContentDescription style={styles.contentDescription} headerText={title} bodyText={description} />
-          <ContentScroll style={styles.contentScroll} onSelectedIndexChange={this.handleSelectedIndexChange} initialIndex={this.props.selectedIndex} />
+          <ContentScroll style={styles.contentScroll} onSelectedIndexChange={this.handleSelectedIndexChange} selectedIndex={index} />
         </FadableView>
       );
     }

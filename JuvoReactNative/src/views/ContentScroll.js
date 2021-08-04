@@ -1,6 +1,7 @@
 'use strict';
 import React, {Component} from 'react';
-import { View, Image, ScrollView, NativeModules, DeviceEventEmitter } from 'react-native';
+import { View, Image, ScrollView, NativeModules, DeviceEventEmitter, InteractionManager } from 'react-native';
+import PropTypes from 'prop-types';
 
 import ContentPicture from './ContentPicture';
 import ResourceLoader from '../ResourceLoader';
@@ -16,27 +17,22 @@ export default class ContentScroll extends Component
   {
     super(props);
     this.state = {
-      renderIndex: props.initialIndex,
+      renderIndex: props.selectedIndex,
     },
 
-    this.selectedIndex = props.initialIndex;
     this.numItems = ResourceLoader.clipsData.length;
+    this.JuvoPlayer = NativeModules.JuvoPlayer;
+
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
     this.updateIndex = this.updateIndex.bind(this);
-    this.JuvoPlayer = NativeModules.JuvoPlayer;
-  }
-
-  updateIndex(newIndex, animate = true)
-  {
-    if(newIndex < 0 || newIndex >= this.numItems)
-      return;
-  
-    console.debug(`ContentScroll.updateIndex(): Index ${this.selectedIndex}->${newIndex} animate ${animate}`);
-    this.selectedIndex = newIndex;
-    const scrolloffset = newIndex * itemWidth;
-    this._scrollView.scrollTo({ x: scrolloffset, y: 0, animated: animate });
-    this.props.onSelectedIndexChange(newIndex);
-    this.setState({renderIndex: newIndex});
+    this.selectIndex = this.selectIndex.bind(this);
+    
+    if(props.selectedIndex < 0 || props.selectedIndex >= this.numItems )
+    {
+      const errMsg = `ContentScroll.constructor(): Selected index '${props.selectedIndex}' out of range '0-${this.numItems}'`;
+      console.error(errMsg);
+      throw new Error(errMsg);
+    }
   }
 
   componentWillMount() 
@@ -45,23 +41,52 @@ export default class ContentScroll extends Component
 
     DeviceEventEmitter.addListener('ContentCatalog/onTVKeyDown', this.onTVKeyDown);
 
-    console.debug('ContentScroll.componentWillMount(): done');
+    // Assure this._scrollView ref is available prior to selecting target index. Ready to use after first render().
+    InteractionManager.runAfterInteractions( () =>
+    {
+      this.selectIndex(this.props.selectedIndex, false);
+      console.log('ContentScroll.scrollToInitial(): done');
+    });
+
+    console.debug(`ContentScroll.componentWillMount(): done. to Index '${this.props.selectedIndex}'`);
   }
   
   componentWillUnmount() 
   {
     console.debug('ContentScroll.componentWillUnmount():');
 
-    DeviceEventEmitter.removeListener('ContentCatalog/onTVKeyDown', this.onTVKeyDown);
+    DeviceEventEmitter.removeAllListeners('ContentCatalog/onTVKeyDown');
 
     console.debug('ContentScroll.componentWillUnmount(): done');
   }
 
   shouldComponentUpdate(nextProps, nextState)
   {
+    // Scrolling operation does not require explicit render.
     const updateRequired = this.state.renderIndex != nextState.renderIndex;
     console.debug(`ContentScroll.shouldComponentUpdate(): ${updateRequired}`);
     return updateRequired;
+  }
+
+  selectIndex(validIndex, animate)
+  {
+    console.debug('ContentScroll.selectIndex():');
+
+    this.setState({renderIndex: validIndex});
+    this._scrollView.scrollTo({ x: validIndex * itemWidth, y: 0, animated: animate });
+    
+    console.log(`ContentScroll.selectIndex(): done. Index '${validIndex}' animated '${animate}'`);
+  }
+
+  updateIndex(newIndex, animate = true)
+  {
+    if(newIndex < 0 || newIndex >= this.numItems)
+      return;
+  
+    this.selectIndex(newIndex, animate);
+    
+    if(this.props.onSelectedIndexChange)
+      this.props.onSelectedIndexChange(newIndex);
   }
 
   onTVKeyDown(pressed) {
@@ -73,11 +98,11 @@ export default class ContentScroll extends Component
     console.debug(`ContentScroll.onTVKeyDown(): ${pressed.KeyName}`);
     switch (pressed.KeyName) {
       case 'Right':
-        this.updateIndex(this.selectedIndex + 1);
+        this.updateIndex(this.state.renderIndex + 1);
         break;
 
       case 'Left':
-        this.updateIndex(this.selectedIndex - 1);
+        this.updateIndex(this.state.renderIndex - 1);
         break;
 
       default:
@@ -94,9 +119,9 @@ export default class ContentScroll extends Component
     {
       console.debug('ContentScroll.render():');
 
-      const index = this.state.renderIndex;
       const uris = ResourceLoader.tilePaths;
       const clipsData = ResourceLoader.clipsData;
+      const index = this.state.renderIndex;     
 
       const renderThumbs = (uri, i) => (
         <View key={i}>
@@ -148,3 +173,7 @@ export default class ContentScroll extends Component
     }
   }
 }
+
+ContentScroll.propTypes = {
+  selectedIndex: PropTypes.number.isRequired,
+};
