@@ -57,7 +57,7 @@ export default class StreamSelectionView extends React.Component {
     };
 
     this.JuvoPlayer = NativeModules.JuvoPlayer;
-    this.XF86BackPressCount = 0;
+    //this.XF86BackPressCount = 0;
 
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
     this.pickerChange = this.pickerChange.bind(this);
@@ -70,6 +70,7 @@ export default class StreamSelectionView extends React.Component {
       return Promise.all([
         this.JuvoPlayer.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Audio),
         this.JuvoPlayer.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Video),
+        this.JuvoPlayer.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Subtitle),
       ]);      
     })();
   }
@@ -133,18 +134,19 @@ export default class StreamSelectionView extends React.Component {
     switch (pressed.KeyName)
     {
       case 'XF86Back':
-        this.XF86BackPressCount++;
+        //this.XF86BackPressCount++;
+        RenderScene.setScene(RenderView.viewCurrent,RenderView.viewNone);
         break;
 
       default:
-        this.XF86BackPressCount = 0;
+        //this.XF86BackPressCount = 0;
         console.debug(`StreamSelectionView.onTVKeyDown(): key ${pressed.KeyName} ignored`);
         return;
     }
 
     console.debug(`StreamSelectionView.onTVKeyDown(): ${pressed.KeyName} processed. XF86Back count ${this.XF86BackPressCount}`);
-    if(this.XF86BackPressCount >= 2)
-      RenderScene.setScene(RenderView.viewCurrent,RenderView.viewNone);
+    //if(this.XF86BackPressCount >= 1)
+    //  RenderScene.setScene(RenderView.viewCurrent,RenderView.viewNone);
   }
 
   async pickerChange(itemValue, itemPosition) 
@@ -191,11 +193,11 @@ export default class StreamSelectionView extends React.Component {
               </View>
               <View style={{ flex: 1, alignItems: 'center' }}>
                   <Text style={styles.textBody}>Subtitles</Text>
-                  <StreamPicker streams={subtitleStreams} style={styles.picker} onValueChange={this.pickerChange} enabled={false} />
+                  <StreamPicker streams={subtitleStreams} style={styles.picker} onValueChange={this.pickerChange} enabled={true} />
               </View>
             </View>
             <View style={[styles.textView, { flex: 1 }]}>
-              <Text style={styles.textFooter}> Press return key twice to close </Text>
+              <Text style={styles.textFooter}> Press return key to close </Text>
             </View>
           </View>
         </FadableView>
