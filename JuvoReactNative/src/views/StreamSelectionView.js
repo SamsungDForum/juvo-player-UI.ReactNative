@@ -57,8 +57,6 @@ export default class StreamSelectionView extends React.Component {
     };
 
     this.JuvoPlayer = NativeModules.JuvoPlayer;
-    //this.XF86BackPressCount = 0;
-
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
     this.pickerChange = this.pickerChange.bind(this);
     this.readStreamData = this.readStreamData.bind(this);
@@ -134,19 +132,15 @@ export default class StreamSelectionView extends React.Component {
     switch (pressed.KeyName)
     {
       case 'XF86Back':
-        //this.XF86BackPressCount++;
         RenderScene.setScene(RenderView.viewCurrent,RenderView.viewNone);
         break;
 
       default:
-        //this.XF86BackPressCount = 0;
         console.debug(`StreamSelectionView.onTVKeyDown(): key ${pressed.KeyName} ignored`);
         return;
     }
 
     console.debug(`StreamSelectionView.onTVKeyDown(): ${pressed.KeyName} processed. XF86Back count ${this.XF86BackPressCount}`);
-    //if(this.XF86BackPressCount >= 1)
-    //  RenderScene.setScene(RenderView.viewCurrent,RenderView.viewNone);
   }
 
   async pickerChange(itemValue, itemPosition) 
