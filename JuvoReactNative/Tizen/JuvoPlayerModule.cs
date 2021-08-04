@@ -402,7 +402,6 @@ namespace JuvoReactNative
         {
             using (LogScope.Create())
             {
-                //Context.RemoveLifecycleEventListener(this);
                 _mainSynchronizationContext.Post(_ => Application.Current.Exit(), null);
             }
         }
