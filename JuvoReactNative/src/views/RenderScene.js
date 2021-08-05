@@ -1,7 +1,7 @@
 'use strict';
 import React, { Component } from 'react';
 
-import { View, NativeModules, NativeEventEmitter, Dimensions, StyleSheet, DeviceEventEmitter } from 'react-native';
+import { View, NativeModules, NativeEventEmitter, Dimensions, StyleSheet, DeviceEventEmitter, InteractionManager } from 'react-native';
 import PropTypes from 'prop-types'
 
 import {Debug} from '../ToolBox';
@@ -140,17 +140,18 @@ export default class RenderScene extends Component
   
   displayScene(scene)
   {
-    // Run setState() outside of setScene() caller scope.
-    setImmediate((s)=>
+    // to the contrary of "logic" described in ContentScroll.scrollToPosition()...
+    // this.. works when operated opposite or so way.. voices in my head say..
+    setImmediate( (s) =>
     {
-      this.setState(s)
+      this.setState(s);
       console.debug('RenderScene.displayScene(): done');
-    },scene);
+    }, scene);
   }
 
   composeMain(view)
   {
-    if( view.name == RenderView.viewNone.name && this.mainView.name == RenderView.viewNone.name)
+    if(view.name == RenderView.viewNone.name && this.mainView.name == RenderView.viewNone.name)
     {
       console.debug('RenderScene.composeMain(): no update');
       return null;
@@ -164,7 +165,7 @@ export default class RenderScene extends Component
 
   composeModal(view)
   {
-    if( view.name == RenderView.viewNone.name && this.modalView.name == RenderView.viewNone.name)
+    if(view.name == RenderView.viewNone.name && this.modalView.name == RenderView.viewNone.name)
     {
       console.debug('RenderScene.composeModal(): no update');
       return null;
@@ -173,7 +174,7 @@ export default class RenderScene extends Component
     let modalComponent = null;
 
     // Transition from view to viewNone (hide without displaying new view)
-    if( view.name == RenderView.viewNone.name)
+    if(view.name == RenderView.viewNone.name)
     {
       // Fade view into oblivion
       const fadingModal = this.modalView;
@@ -202,18 +203,19 @@ export default class RenderScene extends Component
     {
       console.debug(`RenderScene.compose():\n\tmain ${this.mainView.name} -> ${nextMainView.name}\n\tmodal ${this.modalView.name} -> ${nextModalView.name}`);
 
-      let nextScene = {};
-      if( nextMainView.name != RenderView.viewCurrent.name )
-      {
-        const mainViewComponent = this.composeMain(nextMainView);
-        nextScene = {main: mainViewComponent};
-      }
-
-      if( nextModalView.name != RenderView.viewCurrent.name )
-      {
-        const modalViewComponent = this.composeModal(nextModalView);
-        nextScene = {...nextScene, modal: modalViewComponent};
-      }
+      // This is a "wokraround" for content scroll's content picture overlay icon.
+      // In scenarios, not yet identified, scrollTo() mechanism, invoked and completed yields no visual result.
+      // Don't bypass "no view change" scenario; Once rendered, "need do nothing more". Render if present.
+      // Seems to help reflect "bakcground" on screen changes, like a missing puzzle's bit, looks ok, but does not fit.
+      const nextScene = {
+        main: nextMainView.name != RenderView.viewCurrent.name
+                ? this.composeMain(nextMainView)
+                : this.state.main,
+        modal: nextModalView.name != RenderView.viewCurrent.name
+                ? this.composeModal(nextModalView)
+                : this.state.modal
+      };
+      // fading components will be reported as "current" till cleared.
 
       this.displayScene(nextScene);
       console.debug(`RenderScene.compose(): done\nmain:\n${Debug.stringify(this.mainView)}\nmodal:\n${Debug.stringify(this.modalView)}`);

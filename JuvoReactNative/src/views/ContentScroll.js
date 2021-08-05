@@ -22,10 +22,12 @@ export default class ContentScroll extends Component
 
     this.numItems = ResourceLoader.clipsData.length;
     this.JuvoPlayer = NativeModules.JuvoPlayer;
+    this._scrollView = null;
 
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
     this.updateIndex = this.updateIndex.bind(this);
     this.selectIndex = this.selectIndex.bind(this);
+    this.scrollToPosition = this.scrollToPosition.bind(this);
     
     if(props.selectedIndex < 0 || props.selectedIndex >= this.numItems )
     {
@@ -40,14 +42,8 @@ export default class ContentScroll extends Component
     console.debug('ContentScroll.componentWillMount():');
 
     DeviceEventEmitter.addListener('ContentCatalog/onTVKeyDown', this.onTVKeyDown);
-
-    // Assure this._scrollView ref is available prior to selecting target index. Ready to use after first render().
-    InteractionManager.runAfterInteractions( () =>
-    {
-      this.selectIndex(this.props.selectedIndex, false);
-      console.log('ContentScroll.scrollToInitial(): done');
-    });
-
+    this.scrollToPosition(this.props.selectedIndex * itemWidth,false);
+    
     console.debug(`ContentScroll.componentWillMount(): done. to Index '${this.props.selectedIndex}'`);
   }
   
@@ -56,6 +52,7 @@ export default class ContentScroll extends Component
     console.debug('ContentScroll.componentWillUnmount():');
 
     DeviceEventEmitter.removeAllListeners('ContentCatalog/onTVKeyDown');
+    this._scrollView = null;
 
     console.debug('ContentScroll.componentWillUnmount(): done');
   }
@@ -68,12 +65,27 @@ export default class ContentScroll extends Component
     return updateRequired;
   }
 
+  scrollToPosition(xPos, animate=false)
+  {
+    // seems like least sensible way of assuring scrollTo() changes get rendered..
+    // scrollTo() via setImmediate() (an example) yields lower "sucess" rate:
+    //  - will have _scrollView set (most of the time).
+    //  - will be at scroll to location.
+    // .. without overlay (all too often). Why runAfterInteraction() differ? ...?
+    InteractionManager.runAfterInteractions( ()=>
+    {
+      // May be getting dismounted by the time we're scrollin'
+      if(this._scrollView)
+        this._scrollView.scrollTo({ x: xPos, y: 0, animated: animate });
+    });
+  }
+  
   selectIndex(validIndex, animate)
   {
     console.debug('ContentScroll.selectIndex():');
 
+    this.scrollToPosition(validIndex * itemWidth,animate);
     this.setState({renderIndex: validIndex});
-    this._scrollView.scrollTo({ x: validIndex * itemWidth, y: 0, animated: animate });
     
     console.log(`ContentScroll.selectIndex(): done. Index '${validIndex}' animated '${animate}'`);
   }
@@ -113,15 +125,15 @@ export default class ContentScroll extends Component
     console.debug(`ContentScroll.onTVKeyDown(): done. key '${pressed.KeyName}' processed`);
   }
 
-  render() {
-
+  render() 
+  {
     try
     {
       console.debug('ContentScroll.render():');
 
       const uris = ResourceLoader.tilePaths;
       const clipsData = ResourceLoader.clipsData;
-      const index = this.state.renderIndex;     
+      const index = this.state.renderIndex;
 
       const renderThumbs = (uri, i) => (
         <View key={i}>
@@ -158,7 +170,8 @@ export default class ContentScroll extends Component
           style={this.props.style}
           scrollEnabled={false}
           ref={scrollView => {
-            this._scrollView = scrollView;
+            if(this._scrollView == null)
+              this._scrollView = scrollView;
           }}
           automaticallyAdjustContentInsets={false}
           scrollEventThrottle={0}
