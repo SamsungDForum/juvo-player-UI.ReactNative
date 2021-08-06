@@ -1,6 +1,6 @@
 'use strict';
 import React, { Component } from 'react';
-import { Image, NativeModules, Dimensions, StyleSheet, DeviceEventEmitter, } from 'react-native';
+import { Image, NativeModules, Dimensions, StyleSheet, DeviceEventEmitter, InteractionManager, } from 'react-native';
 import PropTypes from 'prop-types'
 
 import FadableView from './FadableView';
@@ -40,6 +40,7 @@ export default class ContentCatalog extends Component
   componentDidMount() 
   {
     DeviceEventEmitter.addListener('ContentCatalog/onTVKeyDown', this.onTVKeyDown);
+    setImmediate(()=>RenderScene.setScene(RenderView.viewCurrent,RenderView.viewNone));
     console.debug('ContentCatalog.componentDidMount(): done');
   }
 
@@ -76,9 +77,9 @@ export default class ContentCatalog extends Component
         const playIndex = this.candidateIndex;
         const playbackView = RenderView.viewPlayback;
         playbackView.args = { selectedIndex: playIndex };
-        
+
         const inProgressView = RenderView.viewInProgress;
-        inProgressView.args = { messageText: 'Almost there...'};
+        inProgressView.args = {messageText: `Starting '${ResourceLoader.clipsData[playIndex].title}'`};
 
         RenderScene.setScene(playbackView,inProgressView);    
         break;

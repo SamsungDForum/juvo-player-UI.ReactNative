@@ -20,6 +20,18 @@ import RenderView from './src/views/RenderView';
 const initialModal = RenderView.viewInProgress;
 initialModal.args = {messageText: 'Getting... ready'};
 const initialScene = { modalView: initialModal };
+const invalidIndex = -1;
+
+function getClipIndexFromDeepLink(deepLink) 
+{
+  console.log(`getClipIndexFromDeepLink(): Processing deep link url ${deepLink.url}`);
+
+  const index = ResourceLoader.clipsData.findIndex(e => e.url === deepLink.url);
+  if (index == invalidIndex) 
+    console.log(`getClipIndexFromDeepLink(): Url ${deepLink.url} index not found`);
+
+  return index;
+}
 
 export default class JuvoReactNative extends Component 
 {
@@ -28,41 +40,51 @@ export default class JuvoReactNative extends Component
     console.debug('JuvoReactNative.constructor():');
 
     super(props);
-    this.selectedClipIndex = 0;
     this.JuvoPlayer = NativeModules.JuvoPlayer;
-    this.JuvoEventEmitter = null;
+        
     this.handleDeepLink = this.handleDeepLink.bind(this);
-    this.finishLoading = this.finishLoading.bind(this);
-    this.loadingPromise = ResourceLoader.load();
+    this.playClipIndex = this.playClipIndex.bind(this);
+    this.completeInitalization = this.completeInitalization.bind(this);
 
+    this.loadingPromise = ResourceLoader.load();
+    this.initializationPromise = null;
+    this.JuvoEventEmitter = null;
+    
     console.debug('JuvoReactNative.constructor(): done');
   };
 
-  componentDidMount() {
+  componentDidMount()
+  {
     console.debug('JuvoReactNative.componentDidMount():');
     this.JuvoEventEmitter = new NativeEventEmitter(this.JuvoPlayer);
-    this.JuvoEventEmitter.addListener('handleDeepLink', async (deepLink) => await this.handleDeepLink(deepLink));
-    this.JuvoPlayer.AttachDeepLinkListener();
-    
+    this.initializationPromise = this.completeInitalization();
     setImmediate(async ()=> 
     {
-      console.debug('JuvoReactNative.loadResources():');
-
-      await this.finishLoading();
-
-      const index = this.selectedClipIndex;
-      const catalogView = RenderView.viewContentCatalog;
-      catalogView.args = { selectedIndex: index };
-      RenderScene.setScene(catalogView, RenderView.viewNone);
-
-      console.debug('JuvoReactNative.loadResources(): done');
+      try
+      {
+        await this.initializationPromise;
+      }
+      catch(error)
+      {
+        console.error(`JuvoReactNative.componentDidMount(): ERROR ${error}`);
+        const errorPopup = RenderView.viewPopup;
+        errorPopup.args = {messageText: 'Failed to initialize'};
+        RenderScene.setScene(RenderView.viewCurrent, errorPopup);
+      }
+      this.initializationPromise = null;
     });
+
     console.debug('JuvoReactNative.componentDidMount(): done');
   }
 
-  componentWillUnmount()
+  async componentWillUnmount()
   {
     console.debug('JuvoReactNative.componentWillUnmount():');
+
+    // await mount completion if running to cleanup event subscriptions.
+    const initInProgress = this.initializationPromise;
+    if(initInProgress)
+      await initInProgress;
 
     this.JuvoEventEmitter.removeAllListeners('handleDeepLink');
     delete this.JuvoEventEmitter;
@@ -70,31 +92,28 @@ export default class JuvoReactNative extends Component
     console.debug('JuvoReactNative.componentWillUnmount(): done');
   }
 
-  async finishLoading() 
+  async completeInitalization()
   {
-    console.debug('JuvoReactNative.finishLoading():');
+    console.debug('JuvoReactNative.completeInitalization():');
+
     if(this.loadingPromise)
     {
       await this.loadingPromise;
       this.loadingPromise = null;
     }
-    console.debug('JuvoReactNative.finishLoading(): done.');
-  }
 
-  async handleDeepLink(deepLink) 
-  {
-    console.log(`JuvoReactNative.handleDeepLink(): Processing deep link url ${deepLink.url}`);
-
-    let index = ResourceLoader.clipsData.findIndex(e => e.url === deepLink.url);
-    if (index == -1) 
+    this.JuvoEventEmitter.addListener('handleDeepLink', deepLink => 
     {
-      console.log(`JuvoReactNative.handleDeepLink(): Url ${deepLink.url} index not found`);
-      return;
-    }
+      setImmediate(this.handleDeepLink,deepLink);
+    });
 
-    await finishLoading();
+    this.JuvoPlayer.AttachDeepLinkListener();
 
-    this.selectedClipIndex = index;
+    console.debug('JuvoReactNative.completeInitalization(): done');
+  }
+ 
+  playClipIndex(index)
+  {
     const playbackView = RenderView.viewPlayback;
     playbackView.args = {selectedIndex:index};
 
@@ -103,9 +122,44 @@ export default class JuvoReactNative extends Component
 
     RenderScene.setScene(playbackView, inProgressView);
   
-    console.log('JuvoReactNative.handleDeepLink(): done.');
+    console.log('JuvoReactNative.playClipIndex(): done.');
   }
   
+  handleDeepLink(deepLink)
+  {
+    console.debug('JuvoReactNative.handleDeepLink():');
+
+    if(deepLink.url == '')
+    {
+      const currentScene = RenderScene.getScene();
+      
+      if(currentScene.mainView.name == RenderView.viewNone.name)
+      {
+        // Have nothing, show default content catalog.
+        console.log('JuvoReactNative.handleDeepLink(): empty url. Showing default content catalog.');
+        const contentSelection = RenderView.viewContentCatalog;
+        contentSelection.args = {selectedIndex: 0};
+        RenderScene.setScene(contentSelection,RenderView.viewCurrent);
+      }
+      else
+      {
+        // Have something, don't change it.
+        console.log(`JuvoReactNative.handleDeepLink(): empty url. Showing main '${currentScene.mainView.name}' modal '${currentScene.modalView.name}'`);
+        RenderScene.setScene(RenderView.viewCurrent,RenderView.viewCurrent);
+      }
+    }
+    else
+    {
+      const index = getClipIndexFromDeepLink(deepLink);
+      if(index == invalidIndex)
+        console.warn(`JuvoReactNative.handleDeepLink(): Url '${deepLink.url}' not found.`);
+      else
+        this.playClipIndex(index);
+    }
+
+    console.log('JuvoReactNative.handleDeepLink(): done');
+  }
+
   render()
   {
     try
