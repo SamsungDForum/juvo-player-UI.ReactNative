@@ -19,6 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text;
 using JuvoLogger;
 using JuvoPlayer.Common;
 using UI.Common;
@@ -58,37 +59,18 @@ namespace PlayerService
 
         public static StreamDescription ToStreamDescription(this Format format, StreamType stream)
         {
-            string description = format.Label;
-            if (string.IsNullOrWhiteSpace(description))
-            {
-                if (!string.IsNullOrWhiteSpace(format.Id) && !int.TryParse(format.Id, out _))
-                {
-                    description = format.Id;
-                }
-                else
-                {
-                    switch (stream)
-                    {
-                        case StreamType.Video:
-                            description = $"{format.Width}x{format.Height}";
-                            if (format.Bitrate != null) description += $" {format.Bitrate / 1000} kbps";
-                            break;
+            string description = string.Empty;
 
-                        case StreamType.Audio:
-                            description = $"{format.Language}";
-                            if (format.Bitrate != null) description += $" {format.Bitrate / 1000} kbps";
-                            break;
+            if (!string.IsNullOrEmpty(format.Language))
+                description += format.Language;
 
-                        case StreamType.Subtitle:
-                            description = $"{format.Language}";
-                            break;
+            if (format.Width.HasValue && format.Height.HasValue)
+                description += " " + format.Width + "x" + format.Height;
+            else if (format.ChannelCount.HasValue)
+                description += " " + format.ChannelCount +" Ch.";
 
-                        default:
-                            description = $"{stream} {format.Id}";
-                            break;
-                    }
-                }
-            }
+            if (format.Bitrate.HasValue)
+                description += " " + (int)(format.Bitrate / 1000) + " kbps";
 
             return new StreamDescription
             {
@@ -170,24 +152,26 @@ namespace PlayerService
             return descriptions;
         }
 
+        public static void DumpFormat(this Format format)
+        {
+            Logger.Debug($"Id: {format.Id}");
+            Logger.Debug($"\tLabel: '{format.Label}'");
+            Logger.Debug($"\tBitrate: '{format.Bitrate}'");
+            Logger.Debug($"\tChannels: '{format.ChannelCount}'");
+            Logger.Debug($"\tCodecs: '{format.Codecs}'");
+            Logger.Debug($"\tContainer: '{format.ContainerMimeType}'");
+            Logger.Debug($"\tFrameRate:'{format.FrameRate}'");
+            Logger.Debug($"\tLanguage: '{format.Language}'");
+            Logger.Debug($"\tSample: '{format.SampleMimeType}'");
+            Logger.Debug($"\tWxH: '{format.Width}x{format.Height}'");
+            Logger.Debug($"\tFramerate: '{format.FrameRate}'");
+        }
         public static IEnumerable<StreamInfo> DumpStreamInfo(this IEnumerable<StreamInfo> streamInfos)
         {
             if (Logger.IsLevelEnabled(LogLevel.Debug))
             {
                 foreach (var info in streamInfos)
-                {
-                    Logger.Debug($"Id: {info.Format.Id}");
-                    Logger.Debug($"\tLabel: '{info.Format.Label}'");
-                    Logger.Debug($"\tBitrate: '{info.Format.Bitrate}'");
-                    Logger.Debug($"\tChannels: '{info.Format.ChannelCount}'");
-                    Logger.Debug($"\tCodecs: '{info.Format.Codecs}'");
-                    Logger.Debug($"\tContainer: '{info.Format.ContainerMimeType}'");
-                    Logger.Debug($"\tFrameRate:'{info.Format.FrameRate}'");
-                    Logger.Debug($"\tLanguage: '{info.Format.Language}'");
-                    Logger.Debug($"\tSample: '{info.Format.SampleMimeType}'");
-                    Logger.Debug($"\tWxH: '{info.Format.Width}x{info.Format.Height}'");
-                    Logger.Debug($"\tFramerate: '{info.Format.FrameRate}'");
-                }
+                    info.Format.DumpFormat();
             }
 
             return streamInfos;
