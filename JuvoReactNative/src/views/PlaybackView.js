@@ -262,11 +262,9 @@ export default class PlaybackView extends Component
         this.handleRewindKey();
         break;
 
-      case 'Return':
-        break;
-
       case 'XF86AudioPlay':
       case 'XF86PlayBack':
+      case 'Return':
         this.pauseResume();
         break;
 
