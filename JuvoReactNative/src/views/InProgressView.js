@@ -23,7 +23,7 @@ export default class InProgressView extends Component {
   render() {
     try
     {
-      console.debug(`InProgressView.render(): done fadeAway '${this.props.fadeAway}' msg '${this.props.messageText}'`);
+      console.log(`InProgressView.render(): done fadeAway '${this.props.fadeAway}' msg '${this.props.messageText}'`);
 
       return (
         <FadableView style={styles.notification} fadeAway={this.props.fadeAway} duration={300} nameTag='InProgress' >

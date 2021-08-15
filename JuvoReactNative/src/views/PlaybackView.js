@@ -28,8 +28,8 @@ export default class PlaybackView extends Component
     this.JuvoPlayer = NativeModules.JuvoPlayer;
     this.JuvoEventEmitter = null;
     
+    // Playback functionality
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
-
     this.onUpdateBufferingProgress = this.onUpdateBufferingProgress.bind(this);
     this.onSeekCompleted = this.onSeekCompleted.bind(this);
     this.onPlaybackError = this.onPlaybackError.bind(this);
@@ -39,8 +39,17 @@ export default class PlaybackView extends Component
     this.pauseResume = this.pauseResume.bind(this);
     this.onEndOfStream = this.onEndOfStream.bind(this);
     this.startPlayback = this.startPlayback.bind(this);
+
+    // PlaybackInfo display
     this.removePlaybackInfo = this.removePlaybackInfo.bind(this);
     this.displayPlaybackInfo = this.displayPlaybackInfo.bind(this);
+
+    // StreamSelectionView functionality
+    this.selectedAudio = null;
+    this.selectedVideo = null;
+    this.selectedSubtitles = null;
+    this.onStreamChanged = this.onStreamChanged.bind(this);
+    this.onHideStreamSelectionView = this.onHideStreamSelectionView.bind(this);
   }
 
   componentDidMount()
@@ -161,7 +170,8 @@ export default class PlaybackView extends Component
     const infoView = ShowPlaybackInfo({
       selectedIndex: this.props.selectedIndex,
       autoHide: autoHide,
-      onFadeOut: this.removePlaybackInfo });
+      onFadeOut: this.removePlaybackInfo,
+    });
 
     this.setState({playbackInfo: infoView});
     console.log(`PlaybackView.displayPlaybackInfo(): done. autoHide '${autoHide}'`);
@@ -245,6 +255,44 @@ export default class PlaybackView extends Component
     }
   }
 
+  onStreamChanged(stream)
+  {
+    console.debug(`PlaybackView.onStreamChanged(): ${Debug.stringify(stream)}`);
+
+    switch(stream.StreamType)
+    {
+      case Native.JuvoPlayer.Common.StreamType.Audio:
+        this.selectedAudio = stream;
+        break;
+
+      case Native.JuvoPlayer.Common.StreamType.Video:
+        this.selectedVideo = stream;
+        break;
+
+      case Native.JuvoPlayer.Common.StreamType.Subtitle:
+        this.selectedSubtitles = stream;
+        break;
+
+      default:
+        console.warn(`PlaybackView.onStreamChanged(): stream '${stream.StreamType}' unsupported.`);
+        return;
+    }
+
+    console.debug('PlaybackView.onStreamChanged(): done');
+  }
+
+  onHideStreamSelectionView()
+  {
+    console.debug('PlaybackView.onHideStreamSelectionView():');
+    const currentScene = RenderScene.getScene();
+    if(currentScene.mainView.name != RenderView.viewPlayback.name)
+      console.log('PlaybackView.onHideStreamSelectionView(): playback view removed. Nothing to hide');
+    else
+      this.displayPlaybackInfo(true);
+      
+    console.debug('PlaybackView.onHideStreamSelectionView(): done');
+  }
+
   onTVKeyDown(pressed) 
   {
     //There are two parameters available:
@@ -278,29 +326,26 @@ export default class PlaybackView extends Component
       case 'Up':
         if( this.state.playbackInfo == null)
         {
-          // playback info with auto hide.
+          // No playback info. Show playback info with auto hide.
           this.displayPlaybackInfo(true);
+          break;
         }
-        else
+        
+        // playback info visible. Prevent auto hide prior to displaying stream selection.
+        this.displayPlaybackInfo(false);
+      
+        // display stream selection
+        const streamSelection = RenderView.viewStreamSelection;
+        streamSelection.args = 
         {
-          // playback info with no auto hide + stream selection
-          this.displayPlaybackInfo(false);
-          const streamSelection = RenderView.viewStreamSelection;
-          const onHideStreamSelection = ()=>
-          {
-            console.debug('PlaybackView.onHideStreamSelection():');
-            const currentScene = RenderScene.getScene();
-            if(currentScene.mainView.name != RenderView.viewPlayback.name)
-              console.log('PlaybackView.onHideStreamSelection(): playback view removed. Nothing to hide');
-            else
-              this.displayPlaybackInfo(true);
-              
-            console.debug('PlaybackView.onHideStreamSelection(): done');
-          };
+          onFadeOut: this.onHideStreamSelectionView,
+          onStreamChanged: this.onStreamChanged,
+          currentAudio: this.selectedAudio,
+          currentVideo: this.selectedVideo,
+          currentSubtitles: this.selectedSubtitles,
+        };
 
-          streamSelection.args = {onFadeOut: onHideStreamSelection};
-          RenderScene.setScene(RenderView.viewCurrent,RenderView.viewStreamSelection);
-        }
+        RenderScene.setScene(RenderView.viewCurrent,streamSelection);
         break;
 
       default:
@@ -316,7 +361,7 @@ export default class PlaybackView extends Component
     try
     {
       const playbackInfo = this.state.playbackInfo;
-      console.debug(`PlaybackView.render(): done. PlaybackInfoView '${playbackInfo != null}'`);
+      console.log(`PlaybackView.render(): done. PlaybackInfoView '${playbackInfo != null}'`);
 
       return(  <View style={styles.page}>{playbackInfo && playbackInfo}</View> );
     }

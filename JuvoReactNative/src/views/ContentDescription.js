@@ -21,7 +21,7 @@ export default class ContentDescription extends Component
     const header = this.props.headerText;
     const body = this.props.bodyText;
 
-    console.debug('ContentDescription.render(): done');
+    console.log('ContentDescription.render(): done');
     return (
       <View style={styles.contentDescription} >
         <Text style={styles.contentHeader}>{header}</Text>

@@ -204,9 +204,9 @@ export default class RenderScene extends Component
       console.debug(`RenderScene.compose():\n\tmain ${this.mainView.name} -> ${nextMainView.name}\n\tmodal ${this.modalView.name} -> ${nextModalView.name}`);
 
       // This is a "wokraround" for content scroll's content picture overlay icon.
-      // In scenarios, not yet identified, scrollTo() mechanism, invoked and completed yields no visual result.
-      // Don't bypass "no view change" scenario; Once rendered, "need do nothing more". Render if present.
-      // Seems to help reflect "bakcground" on screen changes, like a missing puzzle's bit, looks ok, but does not fit.
+      // In scenarios, not yet identified, scrollTo() invoked and completed yields no visual result.
+      // Don't bypass "no view change" scenario: "Once rendered, need do nothing more". Re-render if present.
+      // Seems to help reflect "bakcground" on screen changes.
       const nextScene = {
         main: nextMainView.name != RenderView.viewCurrent.name
                 ? this.composeMain(nextMainView)

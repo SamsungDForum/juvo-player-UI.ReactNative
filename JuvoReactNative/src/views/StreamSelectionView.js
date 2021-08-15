@@ -1,6 +1,6 @@
 'use strict';
 import React from 'react';
-import { View, Text, Picker, NativeModules, StyleSheet, DeviceEventEmitter,Dimensions } from 'react-native';
+import { View, Text, Picker, NativeModules, StyleSheet, DeviceEventEmitter,Dimensions, InteractionManager } from 'react-native';
 import PropTypes from 'prop-types'
 
 import Native from '../Native';
@@ -12,26 +12,36 @@ import RenderScene from './RenderScene';
 const width = Dimensions.get('window').width;
 const height = Dimensions.get('window').height;
 
-function getDefaultStreamDescription(streams) {
-  const defaultStream = getDefaultStream(streams);
-  if (defaultStream !== undefined) return defaultStream.Description;
-  return '';
-}
-
-function getDefaultStream(streams) {
-  for (const stream of streams) {
-    if (stream.Default === true) {
-      return stream;
-    }
-  }
-}
-
 function StreamPicker(props)
 {
+  // enable picker if streams exist.
+  const enabled = props.streams.length > 0;
+  let selectedDescription = null;
+  
+  console.debug(JSON.stringify(props.selected));
+
+  if(props.selected)
+  {
+    selectedDescription = props.selected.Description;
+  }
+  else
+  {
+    // selection not specified. Look for default selection set in native code.
+    for(const stream of props.streams)
+    {
+      if(stream.Default)
+      {
+        selectedDescription = stream.Description;
+        break;
+      }
+    }
+  }
+    
   const pickerProps =
   {
     ...props,
-    title: getDefaultStreamDescription(props.streams),
+    enabled: enabled,
+    title: selectedDescription,
   };
 
   return (
@@ -41,11 +51,26 @@ function StreamPicker(props)
   );
 }
 
-export default class StreamSelectionView extends React.Component {
+function getStreams(player)
+{
+  console.debug('getStreams(): quering available streams');
+
+  return Promise.all([
+    player.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Audio),
+    player.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Video),
+    player.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Subtitle),
+  ]);      
+}
+
+export default class StreamSelectionView extends React.Component
+{
   static defaultProps =
   {
     fadeAway: false,
     onFadeOut: null,
+    currentAudio: null,
+    currentVideo: null,
+    currentSubtitles: null,
   };
 
   constructor(props) {
@@ -59,27 +84,21 @@ export default class StreamSelectionView extends React.Component {
     this.JuvoPlayer = NativeModules.JuvoPlayer;
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
     this.pickerChange = this.pickerChange.bind(this);
-    this.readStreamData = this.readStreamData.bind(this);
+    this.initializeStreamSelection = this.initializeStreamSelection.bind(this);
     
-    this.streamsPromise = (()=> 
-    {
-      console.debug('StreamSelectionView.constructor(): quering available streams');
-
-      return Promise.all([
-        this.JuvoPlayer.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Audio),
-        this.JuvoPlayer.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Video),
-        this.JuvoPlayer.GetStreamsDescription(Native.JuvoPlayer.Common.StreamType.Subtitle),
-      ]);      
-    })();
+    // start getting streams
+    this.streamsPromise = getStreams(this.JuvoPlayer);
   }
 
   componentDidMount() 
   {
     console.debug('StreamSelectionView.componentDidMount():');
 
-    DeviceEventEmitter.addListener('StreamSelectionView/onTVKeyDown', this.onTVKeyDown);
-    this.readStreamData();
-
+    console.log(`  Current audio: '${JSON.stringify(this.props.currentAudio)}'`);
+    console.log(`  Current video: '${JSON.stringify(this.props.currentVideo)}'`);
+    console.log(`  Current subtitles: '${JSON.stringify(this.props.currentSubtitles)}'`);
+    this.initializeStreamSelection();
+    
     console.debug('StreamSelectionView.componentDidMount(): done');
   }
 
@@ -92,33 +111,37 @@ export default class StreamSelectionView extends React.Component {
     console.debug('StreamSelectionView.componentWillUnmount(): done');
   }
 
-  async readStreamData()
+  async initializeStreamSelection()
   {
     try
     {
-      console.debug('StreamSelectionView.readStreamData():');
-      const dataSource = await this.streamsPromise;
+      console.debug('StreamSelectionView.initializeStreamSelection():');
+
+      const streamsSource = await this.streamsPromise;
       const streams = {
         Audio: [],
         Video: [],
         Subtitle: [],
       };
 
-      dataSource.forEach( el =>
+      for(const stream of streamsSource)
       {
-        if(el != null)
-        {
-          const streamLabel = el.streamLabel;
-          streams[streamLabel] = JSON.parse(el[streamLabel]);
-        }
-       });
+        if(!stream) continue;
+        
+        const streamLabel = stream.streamLabel;
+        streams[streamLabel] = JSON.parse(stream[streamLabel]);  
+      }
       
       this.setState(streams);
-      console.debug('StreamSelectionView.readStreamData(): done');
+
+      // add key listener afer init. Prevents init of 'unmounted' object.
+      DeviceEventEmitter.addListener('StreamSelectionView/onTVKeyDown', this.onTVKeyDown);
+
+      console.debug('StreamSelectionView.initializeStreamSelection(): done');
     }
     catch(error)
     {
-      console.error(`StreamSelectionView.readStreamData(): ERROR ${error}`);
+      console.error(`StreamSelectionView.initializeStreamSelection(): ERROR ${error}`);
       const errorView = RenderView.viewPopup;
       errorView.args = {messageText: 'Failed to obtain stream selection.'};
       RenderScene.setScene(RenderView.viewCurrent,errorView);
@@ -140,25 +163,28 @@ export default class StreamSelectionView extends React.Component {
         return;
     }
 
-    console.debug(`StreamSelectionView.onTVKeyDown(): ${pressed.KeyName} processed. XF86Back count ${this.XF86BackPressCount}`);
+    console.debug(`StreamSelectionView.onTVKeyDown(): ${pressed.KeyName} processed.`);
   }
 
   async pickerChange(itemValue, itemPosition) 
   {
-    //Apply the playback setttings to the playback
     try
     {
-      console.log(`StreamSelectionView.pickerChange(): selecting stream ${itemValue.Id} ${itemValue.Description}`);
-      await this.JuvoPlayer.SetStream(itemValue.Id, itemValue.StreamType);
+      console.log(`StreamSelectionView.pickerChange(): selecting stream ${itemValue.StreamType} [${itemValue.GroupIndex} ${itemValue.FormatIndex} ] ${itemValue.Description}`);
+      
+      await this.JuvoPlayer.SetStream(itemValue.GroupIndex, itemValue.FormatIndex);
+      this.props.onStreamChanged(itemValue);
+
       console.log('StreamSelectionView.pickerChange(): done');
     }
     catch(error)
     {
-      console.error('StreamSelectionView.pickerChange(): failed to select strean');
+      console.error(`StreamSelectionView.pickerChange(): ERROR ${error}`);
     }
   }
 
-  render() {
+  render()
+  {
     try
     {
       console.debug('StreamSelectionView.render():');
@@ -167,11 +193,10 @@ export default class StreamSelectionView extends React.Component {
       const videoStreams = this.state.Video;
       const subtitleStreams = this.state.Subtitle;
       
-      const hideView = this.props.fadeAway;
-      console.debug(`StreamSelectionView.render(): done. fadeAway ${hideView}`);
+      console.log(`StreamSelectionView.render(): done. fadeAway ${this.props.fadeAway}`);
 
       return (
-        <FadableView style={styles.streamSelection} duration={300} fadeAway={hideView} onFadeOut={this.props.onFadeOut} removeOnFadeAway={true} nameTag='StreamSelection'>
+        <FadableView style={styles.streamSelection} duration={300} fadeAway={this.props.fadeAway} onFadeOut={this.props.onFadeOut} removeOnFadeAway={true} nameTag='StreamSelection'>
           <View style={styles.selectionBox}>
             <View style={[styles.textView, { flex: 1.5 }]}>
               <Text style={styles.textHeader}> Use arrow keys to navigate. Press enter key to select a setting. </Text>
@@ -179,15 +204,15 @@ export default class StreamSelectionView extends React.Component {
             <View style={{ flex: 2, alignItems: 'flex-start', flexDirection: 'row', backgroundColor: 'transparent' }}>
               <View style={{ flex: 1, alignItems: 'center' }}>                
                   <Text style={styles.textBody}>Audio track</Text>
-                  <StreamPicker streams={audioStreams} style={styles.picker} onValueChange={this.pickerChange} enabled={true} />
+                  <StreamPicker streams={audioStreams} selected={this.props.currentAudio} style={styles.picker} onValueChange={this.pickerChange} />
               </View>
               <View style={{ flex: 1, alignItems: 'center' }}>
                   <Text style={styles.textBody}>Video quality</Text>
-                  <StreamPicker streams={videoStreams} style={styles.picker} onValueChange={this.pickerChange} enabled={true} />
+                  <StreamPicker streams={videoStreams} selected={this.props.currentVideo} style={styles.picker} onValueChange={this.pickerChange} />
               </View>
               <View style={{ flex: 1, alignItems: 'center' }}>
                   <Text style={styles.textBody}>Subtitles</Text>
-                  <StreamPicker streams={subtitleStreams} style={styles.picker} onValueChange={this.pickerChange} enabled={true} />
+                  <StreamPicker streams={subtitleStreams} selected={this.props.currentSubtitles} style={styles.picker} onValueChange={this.pickerChange} />
               </View>
             </View>
             <View style={[styles.textView, { flex: 1 }]}>
@@ -207,6 +232,10 @@ export default class StreamSelectionView extends React.Component {
 StreamSelectionView.propTypes = {
   fadeAway: PropTypes.bool,
   onFadeOut: PropTypes.func,
+  onStreamChanged: PropTypes.func.isRequired,
+  currentAudio: PropTypes.object,
+  currentVideo: PropTypes.object,
+  currentSubtitles: PropTypes.object,
 };
 
 const styles = StyleSheet.create({

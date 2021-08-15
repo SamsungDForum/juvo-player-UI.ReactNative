@@ -144,7 +144,7 @@ export default class ContentCatalog extends Component
       const title = ResourceLoader.clipsData[index].title;
       const description = ResourceLoader.clipsData[index].description;
 
-      console.debug(`ContentCatalog.render(): done. index: ${index} bigPicVisible ${isBigPicVisible}`);
+      console.log(`ContentCatalog.render(): done. index: ${index} bigPicVisible ${isBigPicVisible}`);
 
       return (
         <FadableView style={styles.contentCatalog} duration={300} >

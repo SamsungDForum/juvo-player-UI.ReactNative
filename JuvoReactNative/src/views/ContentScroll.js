@@ -163,7 +163,7 @@ export default class ContentScroll extends Component
         </View>
       );
 
-      console.debug(`ContentScroll.render(): done. index '${index}' uri# '${uris.length} clips# '${clipsData.length}'`);
+      console.log(`ContentScroll.render(): done. index '${index}' uri# '${uris.length} clips# '${clipsData.length}'`);
 
       return (        
         <ScrollView

@@ -174,10 +174,10 @@ export default class PlaybackInfo extends Component
       const playbackPos = toHHMMSS(this.state.position);
       const playbackDur = toHHMMSS(this.state.duration);
       const progress = this.state.duration > 0 ? this.state.position / this.state.duration : 0;
-
       const hide = this.state.hide;
 
-      console.debug(`PlaybackInfo.render(): done. autoHide '${this.props.autoHide}' hide '${hide}' playing '${isPlaying}' progress '${progress}' Position-Duration '${playbackPos}'-'${playbackDur}'`);
+      console.log(`PlaybackInfo.render(): done. autoHide '${this.props.autoHide}' hide '${hide}' playing '${isPlaying}' progress '${progress}' Position-Duration '${playbackPos}'-'${playbackDur}'`);
+
       return (
         <FadableView style={styles.playbackInfo} duration={300} fadeAway={hide} onFadeOut={this.props.onFadeOut} removeOnHide={false} > 
        

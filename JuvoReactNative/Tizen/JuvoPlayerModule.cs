@@ -201,17 +201,9 @@ namespace JuvoReactNative
                 });
         }
 
-        private async Task<List<StreamDescription>> GetStreamTracks(StreamType streamType)
-        {
-            Logger.Info($"{streamType}");
-
-            return await Player.GetStreamsDescription(streamType);
-        }
-
         //////////////////JS methods//////////////////
-        /// DO NOTE:
-        /// All JS to Native calls are ASYNC!
-        /// Use promise/event if sync execution is needed
+        /// NOTES:
+        /// - All JS to Native calls are async.
         //////////////////////////////////////////////
         [ReactMethod]
         public async void GetStreamsDescription(int streamTypeIndex, IPromise promise)
@@ -220,8 +212,8 @@ namespace JuvoReactNative
             {
                 try
                 {
-                    var streamType = (StreamType) streamTypeIndex;
-                    var streams = await GetStreamTracks(streamType).ConfigureAwait(false);
+                    var streamType = (StreamType)streamTypeIndex;
+                    var streams = await Player.GetStreamsDescription(streamType);
 
                     var streamLabel = streamType.ToString();
                     var res = new JObject();
@@ -239,23 +231,14 @@ namespace JuvoReactNative
         }
 
         [ReactMethod]
-        public async void SetStream(string trackId, int streamTypeIndex, IPromise promise)
+        public async void SetStream(int groupIndex, int formatIndex, IPromise promise)
         {
             using (LogScope.Create())
             {
                 try
                 {
-                    var streamType = (StreamType) streamTypeIndex;
-                    var tracks = await GetStreamTracks(streamType).ConfigureAwait(false);
-                    var track = tracks.FirstOrDefault(trackEntry => trackEntry.Id == trackId);
-                    if (track == default)
-                    {
-                        promise.Reject("Not available", "Track is no longer available for selection");
-                        return;
-                    }
-
-                    await Player.ChangeActiveStream(track).ConfigureAwait(false);
-                    promise.Resolve(Player.State.ToString());
+                    await Player.ChangeActiveStream(groupIndex, formatIndex).ConfigureAwait(false);
+                    promise.Resolve(default);
                 }
                 catch (Exception e)
                 {
@@ -330,7 +313,7 @@ namespace JuvoReactNative
                     Logger.Warn(e.Message);
                 }
 
-                // Don't pass "failed/sucess" to JS. Promise is to allow JS to wait for inocation completion.
+                // Don't pass "failed/sucess" to JS. Promise is used purely as operation completion.
                 promise.Resolve(default);
             }
         }
@@ -375,7 +358,7 @@ namespace JuvoReactNative
         [ReactMethod]
         public void Forward()
         {
-            using (LogScope.Create()) 
+            using (LogScope.Create())
                 _seekLogic.SeekForward();
         }
 
@@ -390,20 +373,16 @@ namespace JuvoReactNative
         public void AttachDeepLinkListener()
         {
             using (LogScope.Create())
-            {
                 _deepLinkSub = _deepLinkSender
                     .DeepLinkReceived()
                     .Subscribe(OnDeepLinkReceived, OnDeepLinkClosed);
-            }
         }
 
         [ReactMethod]
         public void ExitApp()
         {
             using (LogScope.Create())
-            {
                 _mainSynchronizationContext.Post(_ => Application.Current.Exit(), null);
-            }
         }
 
         [ReactMethod]

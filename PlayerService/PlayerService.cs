@@ -191,31 +191,28 @@ namespace PlayerService
             await job.ConfigureAwait(false);
         }
 
-        public async Task ChangeActiveStream(StreamDescription streamDescription)
+        public async Task ChangeActiveStream(int groupIdx, int formatIdx)
         {
-            async Task ChangeStreamJob(StreamDescription targetStream)
+            async Task ChangeStreamJob(int groupId, int formatId)
             {
-                var selected = _player.GetStreamGroups()
-                    .SelectStream(targetStream);
+                var (groups, selectors) = _player.GetSelectedStreamGroups();
 
-                if (selected != default)
+                if (formatId == PlayerServiceToolBox.ThroughputSelection)
                 {
-                    var (newGroups, newSelectors) = _player
-                        .GetSelectedStreamGroups()
-                        .UpdateSelection(selected);
-
-                    await _player.SetStreamGroups(newGroups, newSelectors);
-
-                    Logger.Info($"{targetStream} Selected");
+                    selectors[groupId] = new ThroughputHistoryStreamSelector(new ThroughputHistory());
+                    Logger.Info($"Selecting {groups[groupId].ContentType} 'ThroughputHistoryStreamSelector'");
                 }
                 else
                 {
-                    Logger.Warn($"{targetStream} not found");
+                    selectors[groupId] = new FixedStreamSelector(formatId);
+                    Logger.Info($"Selecting {groups[groupId].ContentType} FormatId '{formatId}' {groups[groupId].Streams[formatId].Format.FormatDescription()}");
                 }
+
+                await _player.SetStreamGroups(groups, selectors);
             }
 
             var job = await _playerThread
-                .ThreadJob(() => ChangeStreamJob(streamDescription).ReportException(_errorSubject, _changeStreamFailMessage))
+                .ThreadJob(() => ChangeStreamJob(groupIdx, formatIdx).ReportException(_errorSubject, _changeStreamFailMessage))
                 .ConfigureAwait(false);
 
             await job.ConfigureAwait(false);
@@ -228,21 +225,21 @@ namespace PlayerService
 
         public async Task<List<StreamDescription>> GetStreamsDescription(StreamType streamType)
         {
-            async Task<List<StreamDescription>> GetStreamsJob(StreamType stream)
+            Task<List<StreamDescription>> GetStreamsJob(ContentType contentType)
             {
-                return _player
-                    .GetStreamGroups()
-                    .GetStreamDescriptionsFromStreamType(stream)
-                    .ToList();
+                Logger.Info(contentType.ToString());
+
+                // Do Note. Odering of streams in StreamGroups differs between GetStreamGroups() and GetSelectedStresmsGroups().
+                return Task.FromResult(_player
+                    .GetSelectedStreamGroups()
+                    .ToStreamDescription(contentType));
             }
 
             var job = await _playerThread
-                .ThreadJob(() => GetStreamsJob(streamType).ReportException(_errorSubject))
+                .ThreadJob(() => GetStreamsJob(streamType.AsContentType()).ReportException(_errorSubject))
                 .ConfigureAwait(false);
 
-            var streamList = await job.ConfigureAwait(false) ?? new List<StreamDescription>();
-
-            return streamList;
+            return await job.ConfigureAwait(false);
         }
 
         public async Task SetSource(ClipDefinition clip)
@@ -286,10 +283,11 @@ namespace PlayerService
 
         public async Task Start()
         {
-            async Task StartJob()
+            Task StartJob()
             {
                 _player.Play();
                 Logger.Info(_player.State.ToString());
+                return Task.CompletedTask;
             }
 
             var job = await _playerThread

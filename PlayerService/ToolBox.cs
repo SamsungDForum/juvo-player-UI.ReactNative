@@ -17,9 +17,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text;
 using JuvoLogger;
 using JuvoPlayer.Common;
 using UI.Common;
@@ -57,7 +55,48 @@ namespace PlayerService
     {
         public static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
 
-        public static StreamDescription ToStreamDescription(this Format format, StreamType stream)
+        public const int ThroughputSelection = -1;
+
+        // Note:
+        // Player's StreamType to Content type uses platform's StreamType. Use own conversions.
+        public static StreamType AsStreamType(this JuvoPlayer.Common.ContentType contentType)
+        {
+            switch (contentType)
+            {
+                case ContentType.Audio:
+                    return StreamType.Audio;
+                case ContentType.Video:
+                    return StreamType.Video;
+                case ContentType.Text:
+                    return StreamType.Subtitle;
+
+                case ContentType.Application:
+                case ContentType.Unknown:
+                    return StreamType.Unknown;
+                default:
+                    return StreamType.Unknown;
+            }
+        }
+
+        public static ContentType AsContentType(this JuvoPlayer.Common.StreamType streamType)
+        {
+            switch (streamType)
+            {
+                case StreamType.Audio:
+                    return ContentType.Audio;
+                case StreamType.Video:
+                    return ContentType.Video;
+                case StreamType.Subtitle:
+                    return ContentType.Text;
+
+                case StreamType.Unknown:
+                    return ContentType.Unknown;
+                default:
+                    return ContentType.Unknown;
+            }
+        }
+
+        public static string FormatDescription(this Format format)
         {
             string description = string.Empty;
 
@@ -67,67 +106,72 @@ namespace PlayerService
             if (format.Width.HasValue && format.Height.HasValue)
                 description += " " + format.Width + "x" + format.Height;
             else if (format.ChannelCount.HasValue)
-                description += " " + format.ChannelCount +" Ch.";
+                description += " " + format.ChannelCount + " Ch.";
 
             if (format.Bitrate.HasValue)
                 description += " " + (int)(format.Bitrate / 1000) + " kbps";
 
-            return new StreamDescription
-            {
-                Default = format.RoleFlags.HasFlag(RoleFlags.Main),
-                Description = description,
-                Id = format.Id,
-                StreamType = stream
-            };
+            return description;
         }
 
-        public static IEnumerable<StreamDescription> GetStreamDescriptionsFromStreamType(this StreamGroup[] groups, StreamType type)
+        public static List<StreamDescription> ToStreamDescription(this (StreamGroup[] groups, IStreamSelector[] selectors) grouping, ContentType targeType)
         {
-            ContentType content = type.ToContentType();
-            return groups
-                .Where(group => group.ContentType == content)
-                .SelectMany(group => group.Streams)
-                .Select(format => format.Format.ToStreamDescription(type));
-        }
+            var descriptions = new List<StreamDescription>();
+            var (groups, selectors) = grouping;
 
-        public static (StreamGroup group, IStreamSelector selector) SelectStream(this StreamGroup[] groups, StreamDescription targetStream)
-        {
-            ContentType type = targetStream.StreamType.ToContentType();
-
-            var prospectGroups = groups
-                .Where(group => group.ContentType == type)
-                .Select(group => group);
-
-            foreach (var prospect in prospectGroups)
+            var groupCount = groups.Length;
+            for (var g = 0; g < groupCount; g++)
             {
-                var prospectStreams = prospect.Streams.Count;
-                for (var streamIndex = 0; streamIndex < prospectStreams; streamIndex++)
+                if (groups[g].ContentType != targeType)
+                    continue;
+
+                var streams = groups[g].Streams;
+                var streamCount = streams.Count;
+
+                // if there are no streams in group of interest.. nothing more to do.
+                // Not expecting multiple group entries for same StreamType
+                if (streamCount == 0)
+                    break;
+
+                var streamType = targeType.AsStreamType();
+
+                // Add 'auto' bandwidth selection for video
+                if (streamType == StreamType.Video)
                 {
-                    if (prospect.Streams[streamIndex].Format.Id.Equals(targetStream.Id))
-                        return (prospect, new FixedStreamSelector(streamIndex));
+                    descriptions.Add(new StreamDescription
+                    {
+                        // Mark as default if selector is throughput.
+                        // Manual stream selections is tracked.. manually (done in UI).
+                        Default = selectors[g] is ThroughputHistoryStreamSelector,
+                        Description = "Auto",
+                        FormatIndex = ThroughputSelection,
+                        GroupIndex = g,
+                        Id = "?",
+                        StreamType = StreamType.Video
+                    });
                 }
+
+                for (var f = 0; f < streamCount; f++)
+                {
+                    descriptions.Add(new StreamDescription
+                    {
+                        Default = false,
+                        FormatIndex = f,
+                        GroupIndex = g,
+                        Description = streams[f].Format.FormatDescription(),
+                        Id = streams[f].Format.Id,
+                        StreamType = streamType
+                    });
+                }
+
+                // No need to scan further. Not expecting multiple group entries for same StreamType
+                break;
             }
 
-            return default;
+            return descriptions;
         }
 
-        public static (StreamGroup[], IStreamSelector[]) UpdateSelection(
-            this (StreamGroup[] groups, IStreamSelector[] selectors) currentSelection,
-            (StreamGroup group, IStreamSelector selector) newSelection)
-        {
-            for (int i = 0; i < currentSelection.groups.Length; i++)
-            {
-                if (currentSelection.groups[i].ContentType == newSelection.group.ContentType)
-                {
-                    currentSelection.groups[i] = newSelection.group;
-                    currentSelection.selectors[i] = newSelection.selector;
-                }
-            }
-
-            return currentSelection;
-        }
-
-        public static StreamGroup[] DumpStreamGroups(this StreamGroup[] groups)
+        public static IEnumerable<StreamGroup> DumpStreamGroups(this IEnumerable<StreamGroup> groups)
         {
             if (Logger.IsLevelEnabled(LogLevel.Debug))
             {
@@ -156,16 +200,21 @@ namespace PlayerService
         {
             Logger.Debug($"Id: {format.Id}");
             Logger.Debug($"\tLabel: '{format.Label}'");
+            Logger.Debug($"\tSelection Flags: '{format.SelectionFlags}'");
+            Logger.Debug($"\tRole Flags: '{format.RoleFlags}'");
             Logger.Debug($"\tBitrate: '{format.Bitrate}'");
-            Logger.Debug($"\tChannels: '{format.ChannelCount}'");
             Logger.Debug($"\tCodecs: '{format.Codecs}'");
-            Logger.Debug($"\tContainer: '{format.ContainerMimeType}'");
-            Logger.Debug($"\tFrameRate:'{format.FrameRate}'");
-            Logger.Debug($"\tLanguage: '{format.Language}'");
-            Logger.Debug($"\tSample: '{format.SampleMimeType}'");
+            Logger.Debug($"\tContainer MimeType: '{format.ContainerMimeType}'");
+            Logger.Debug($"\tSample MimeType: '{format.SampleMimeType}'");
             Logger.Debug($"\tWxH: '{format.Width}x{format.Height}'");
-            Logger.Debug($"\tFramerate: '{format.FrameRate}'");
+            Logger.Debug($"\tFrame Rate:'{format.FrameRate}'");
+            Logger.Debug($"\tSample Rate: '{format.SampleRate}'");
+            Logger.Debug($"\tChannel Count: '{format.ChannelCount}'");
+            Logger.Debug($"\tSample Rate: '{format.SampleRate}'");
+            Logger.Debug($"\tLanguage: '{format.Language}'");
+            Logger.Debug($"\tAccessibility Channel: '{format.AccessibilityChannel}'");
         }
+
         public static IEnumerable<StreamInfo> DumpStreamInfo(this IEnumerable<StreamInfo> streamInfos)
         {
             if (Logger.IsLevelEnabled(LogLevel.Debug))
