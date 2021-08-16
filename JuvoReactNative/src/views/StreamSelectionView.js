@@ -1,6 +1,6 @@
 'use strict';
 import React from 'react';
-import { View, Text, Picker, NativeModules, StyleSheet, DeviceEventEmitter,Dimensions, InteractionManager } from 'react-native';
+import { View, Text, Picker, NativeModules, StyleSheet, DeviceEventEmitter,Dimensions } from 'react-native';
 import PropTypes from 'prop-types'
 
 import Native from '../Native';
@@ -14,12 +14,8 @@ const height = Dimensions.get('window').height;
 
 function StreamPicker(props)
 {
-  // enable picker if streams exist.
-  const enabled = props.streams.length > 0;
   let selectedDescription = null;
   
-  console.debug(JSON.stringify(props.selected));
-
   if(props.selected)
   {
     selectedDescription = props.selected.Description;
@@ -40,7 +36,8 @@ function StreamPicker(props)
   const pickerProps =
   {
     ...props,
-    enabled: enabled,
+    // enable picker if stream(s) exist.
+    enabled: props.streams.length > 0,
     title: selectedDescription,
   };
 
@@ -94,9 +91,9 @@ export default class StreamSelectionView extends React.Component
   {
     console.debug('StreamSelectionView.componentDidMount():');
 
-    console.log(`  Current audio: '${JSON.stringify(this.props.currentAudio)}'`);
-    console.log(`  Current video: '${JSON.stringify(this.props.currentVideo)}'`);
-    console.log(`  Current subtitles: '${JSON.stringify(this.props.currentSubtitles)}'`);
+    console.log(`  Current audio: '${Debug.stringify(this.props.currentAudio)}'`);
+    console.log(`  Current video: '${Debug.stringify(this.props.currentVideo)}'`);
+    console.log(`  Current subtitles: '${Debug.stringify(this.props.currentSubtitles)}'`);
     this.initializeStreamSelection();
     
     console.debug('StreamSelectionView.componentDidMount(): done');

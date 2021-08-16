@@ -56,6 +56,8 @@ namespace PlayerService
         public static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
 
         public const int ThroughputSelection = -1;
+        public const string ThroughputDescription = "Auto";
+        public const string ThroughputId = @"\ō͡≡o˞̶";
 
         // Note:
         // Player's StreamType to Content type uses platform's StreamType. Use own conversions.
@@ -135,22 +137,6 @@ namespace PlayerService
 
                 var streamType = targeType.AsStreamType();
 
-                // Add 'auto' bandwidth selection for video
-                if (streamType == StreamType.Video)
-                {
-                    descriptions.Add(new StreamDescription
-                    {
-                        // Mark as default if selector is throughput.
-                        // Manual stream selections is tracked.. manually (done in UI).
-                        Default = selectors[g] is ThroughputHistoryStreamSelector,
-                        Description = "Auto",
-                        FormatIndex = ThroughputSelection,
-                        GroupIndex = g,
-                        Id = "?",
-                        StreamType = StreamType.Video
-                    });
-                }
-
                 for (var f = 0; f < streamCount; f++)
                 {
                     descriptions.Add(new StreamDescription
@@ -162,6 +148,34 @@ namespace PlayerService
                         Id = streams[f].Format.Id,
                         StreamType = streamType
                     });
+                }
+
+                switch (streamType)
+                {
+                    case StreamType.Video when streamCount > 1:
+                        // Add 'Auto' option if multiple video streams exist.
+                        descriptions.Add(new StreamDescription
+                        {
+                            // Mark as default if selector is throughput.
+                            // Manual stream selections is tracked.. manually (done in UI).
+                            Default = selectors[g] is ThroughputHistoryStreamSelector,
+                            Description = ThroughputDescription,
+                            FormatIndex = ThroughputSelection,
+                            GroupIndex = g,
+                            Id = ThroughputId,
+                            StreamType = StreamType.Video
+                        });
+                        break;
+
+                    case StreamType.Video:
+                        // One video stream.
+                        descriptions[0].Default = true;
+                        break;
+
+                    case StreamType.Audio:
+                        // Default audio = audio.streamcount - 1
+                        descriptions[streamCount - 1].Default = true;
+                        break;
                 }
 
                 // No need to scan further. Not expecting multiple group entries for same StreamType
