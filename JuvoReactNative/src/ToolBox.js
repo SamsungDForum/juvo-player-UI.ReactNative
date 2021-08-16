@@ -1,39 +1,62 @@
 'use strict';
-function obj2strSafe(obj2dump,indent)
+
+const indentMark='  ';
+const openMark='{'
+const closeMark='}'
+const eolMark='\n';
+
+function dumpObject(object, indentLevel=1)
 {
-  let cache = [];
-
-  const dump = JSON.stringify(
-    obj2dump, 
-    (obj, value) => 
-    {
-      if (typeof value === 'object' && value !== null) 
-      {
-        // Duplicate reference found, discard key
-        if (cache.includes(value)) return;
+  if(!object)
+    return `'${object}'`;
   
-        // Store value in our collection
-        cache.push(value);
+  const indent = indentMark.repeat(indentLevel);
+  let poo = openMark;
+  
+  for(const [key, value] of Object.entries(object)) 
+  {
+    const valueType = typeof(value);
+    
+    poo += `${eolMark}${indent}[${valueType}] ${key}: `;
+    
+    if(valueType=="object")
+    { 
+      // Own property? Recurse it.
+      // Inherited? tread as value without inquisitioning it's content.
+      if(object.hasOwnProperty(key))
+      {
+        poo += dumpObject(value,indentLevel+1);
+        continue;
       }
-      return value;
-    },
-    indent );
+    }
+    else if(valueType=="function")
+    {
+      // don't output function body, 'defined' if present
+      if(value)
+      {
+        poo += "'defined'";
+        continue;
+      }
+    }
+    
+    poo += `'${value}'`;
+  }
 
-  cache = null;
-  return dump;
+  poo += eolMark + indentMark.repeat(indentLevel-1) + closeMark;
+  return poo;
 }
 
 export const Debug = 
 {
-  stringify: function(obj2str, indent=2)
+  stringify: function(obj2str)
   {
-    return obj2strSafe(obj2str,indent);
+    return dumpObject(obj2str,1);
   },
 
   logLineByLine: function(str, separator ='\n')
   {
     const lineArr = str.split(separator);
-    for(line of lineArr)
+    for( line of lineArr )
       console.debug(line);
   }
 };
