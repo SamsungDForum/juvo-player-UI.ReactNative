@@ -33,7 +33,7 @@ namespace UI.Common
         string CurrentCueText { get; }
         Task Pause();
         Task SeekTo(TimeSpan to);
-        Task ChangeActiveStream(StreamDescription streamDescription);
+        Task ChangeActiveStream(int groupIdx, int formatIdx);
         void DeactivateStream(StreamType streamType);
         Task<List<StreamDescription>> GetStreamsDescription(StreamType streamType);
         Task SetSource(ClipDefinition clip);

@@ -1,151 +1,209 @@
 'use strict';
 import React, { Component } from 'react';
-import { View, NativeModules, Dimensions, StyleSheet, DeviceEventEmitter } from 'react-native';
+import { Image, NativeModules, Dimensions, StyleSheet, DeviceEventEmitter, InteractionManager, } from 'react-native';
+import PropTypes from 'prop-types'
 
-import HideableView from './HideableView';
-import ContentPicture from './ContentPicture';
+import FadableView from './FadableView';
 import ContentScroll from './ContentScroll';
 import ResourceLoader from '../ResourceLoader';
+import ContentDescription from './ContentDescription';
+
+import RenderScene from './RenderScene'; 
+import RenderView from './RenderView';
 
 const width = Dimensions.get('window').width;
 const height = Dimensions.get('window').height;
-const debounceCompleted = -1;
+const invalidTimeoutId = -1;
 const debounceTimeout = 200; // 200ms idle timeout
+const overlayUri = ResourceLoader.contentDescriptionBackground;
 
-export default class ContentCatalog extends Component {
-  constructor(props) {
+export default class ContentCatalog extends Component 
+{
+  constructor(props) 
+  {
     super(props);
-    this.state = {
-      selectedClipIndex: 0,
-      bigPicVisible: true
+    this.state = 
+    {
+      selectedClipIndex: props.selectedIndex,
+      renderBackground: true,
     };
 
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
     this.handleSelectedIndexChange = this.handleSelectedIndexChange.bind(this);
     this.JuvoPlayer = NativeModules.JuvoPlayer;
     this.onIndexChangeDebounceCompleted = this.onIndexChangeDebounceCompleted.bind(this);
-    this.debounceIndexChange = debounceCompleted;
-    this.candidateIndex = 0;
+    
+    this.debounceIndexChangeTimeoutId = invalidTimeoutId;
+    this.candidateIndex = props.selectedIndex;
   }
   
-  componentDidMount() {
-    console.debug('ContentCatalog.componentDidMount()');
+  componentDidMount() 
+  {
     DeviceEventEmitter.addListener('ContentCatalog/onTVKeyDown', this.onTVKeyDown);
+    setImmediate(()=>RenderScene.setScene(RenderView.viewCurrent,RenderView.viewNone));
+    console.debug('ContentCatalog.componentDidMount(): done');
   }
 
-  componentWillUnmount() {
-    console.debug('ContentCatalog.componentWillUnmount()');
-    DeviceEventEmitter.removeListener('ContentCatalog/onTVKeyDown', this.onTVKeyDown);
+  componentWillUnmount() 
+  {
+    DeviceEventEmitter.removeAllListeners('ContentCatalog/onTVKeyDown');
+    console.debug('ContentCatalog.componentWillUnmount(): done');
   }
 
-  onTVKeyDown(pressed) {
-    //There are two parameters available:
-    //pressed.KeyName
-    //pressed.KeyCode
-    
-    switch (pressed.KeyName) {
-      case 'XF86AudioStop':
+  shouldComponentUpdate(nextProps, nextState)
+  {
+    const updateRequired =  nextState.selectedClipIndex != this.state.selectedClipIndex ||
+                            nextState.renderBackground != this.state.renderBackground;
+    console.debug(`ContentCatalog.shouldComponentUpdate(): ${updateRequired}`);
+    return updateRequired;
+  }
+
+  onTVKeyDown(pressed) 
+  {
+    console.debug(`ContentCatalog.onTVKeyDown(): key ${pressed.KeyName}`);
+
+    switch (pressed.KeyName) 
+    {
       case 'Return':
-      case 'XF86AudioPlay':
-      case 'XF86PlayBack':
-        if(this.debounceIndexChange != debounceCompleted) 
+        if(this.debounceIndexChangeTimeoutId != invalidTimeoutId) 
         {
-          clearTimeout(this.debounceIndexChange);
-          onIndexChangeDebounceCompleted();
+          clearTimeout(this.debounceIndexChangeTimeoutId);
+          this.debounceIndexChangeTimeoutId = invalidTimeoutId;
         }
         
-        this.props.switchView('PlaybackView');
+        // Use candidate rather then selected index.
+        // On debounce complete, candidateIndex = selectedIndex
+        // During debounce, candidate index is one to be played.
+        const playIndex = this.candidateIndex;
+        const playbackView = RenderView.viewPlayback;
+        playbackView.args = { selectedIndex: playIndex };
+
+        const inProgressView = RenderView.viewInProgress;
+        inProgressView.args = {messageText: `Starting '${ResourceLoader.clipsData[playIndex].title}'`};
+
+        RenderScene.setScene(playbackView,inProgressView);    
         break;
 
       case 'XF86Back':
         this.JuvoPlayer.ExitApp();
         break;
+
+      default:
+        console.debug(`ContentCatalog.onTVKeyDown(): done. ${pressed.KeyName} ignored`);
+        return;
     }
+
+    console.log(`ContentCatalog.onTVKeyDown(): done. ${pressed.KeyName} processed`);
   }
  
   onIndexChangeDebounceCompleted()
   {
-    this.debounceIndexChange = debounceCompleted;
- 
-    this.setState(
-      {
-        selectedClipIndex: this.candidateIndex,
-        bigPicVisible: true
-    });
+    console.debug(`ContentCatalog.onIndexChangeDebounceCompleted():`);
 
-    console.debug('ContentCatalog.onIndexChangeDebounceCompleted(): done');
+    this.debounceIndexChangeTimeoutId = invalidTimeoutId;
+    const newIndex = this.candidateIndex;
+ 
+    this.setState({
+      selectedClipIndex: newIndex,
+      renderBackground: true
+    });
+    console.debug(`ContentCatalog.onIndexChangeDebounceCompleted(): done. Index ${newIndex}`);
   }
 
-  handleSelectedIndexChange(index) {
-
+  handleSelectedIndexChange(index)
+  {
     console.debug('ContentCatalog.handleSelectedIndexChange():');
     
-    if(this.debounceIndexChange != debounceCompleted)
+    if(this.debounceIndexChangeTimeoutId != invalidTimeoutId)
     {
-      clearTimeout(this.debounceIndexChange);
-      this.debounceIndexChange = debounceCompleted;
+      clearTimeout(this.debounceIndexChangeTimeoutId);
+      this.debounceIndexChangeTimeoutId = invalidTimeoutId;
     }
     
-    // Update index.tizen.js with new index
-    this.props.onSelectedIndexChange(index);
-
     this.candidateIndex = index;
    
-    if(this.state.bigPicVisible)
+    if(this.state.renderBackground)
     {
       console.debug('ContentCatalog.handleSelectedIndexChange(): Hiding big pic');
-      this.setState({bigPicVisible: false});
+      this.setState({renderBackground: false});
     }
 
-    this.debounceIndexChange = setTimeout(this.onIndexChangeDebounceCompleted,debounceTimeout);
+    this.debounceIndexChangeTimeoutId = setTimeout(this.onIndexChangeDebounceCompleted, debounceTimeout);
   }
 
   render() {
     try
     {
-      const isVisible = this.props.visible;
-      const isBigPicVisible = (this.state.bigPicVisible && isVisible);
-      
+      console.debug(`ContentCatalog.render():`);
+
+      const isBigPicVisible = this.state.renderBackground;
       const index = this.state.selectedClipIndex;
-      const remoteUri = Object.freeze({ uri: ResourceLoader.tilePaths[index]});
+
+      const remoteUri = { uri: ResourceLoader.tilePaths[index]};
       
-      const overlay = ResourceLoader.contentDescriptionBackground;
-      const indexChange = this.handleSelectedIndexChange;
+      const title = ResourceLoader.clipsData[index].title;
+      const description = ResourceLoader.clipsData[index].description;
 
-      const deepLink = this.props.deepLinkIndex;
+      console.log(`ContentCatalog.render(): done. index: ${index} bigPicVisible ${isBigPicVisible}`);
 
-      console.debug(`ContentCatalog.render(): Visible: ${isVisible} BigPicVisible ${isBigPicVisible}`);
       return (
-        <HideableView visible={isVisible} duration={300}>
-          <View style={[styles.page, { alignItems: 'flex-end' }]}>
-            <View style={[styles.cell, { height: '70%', width: '70%' }]}>
-              <ContentPicture fadeDuration={100} visible={isBigPicVisible} source={remoteUri} width={'100%'} height={'100%'} />
-              <ContentPicture visible={isVisible} position={'absolute'} source={overlay} selectedIndex={index} width={'100%'} height={'100%'} />
-            </View>
-          </View>
-          <View style={[styles.page, { position: 'absolute' }]}>
-            <ContentScroll
-              onSelectedIndexChange={indexChange}
-              contentURIs={ResourceLoader.tilePaths}
-              deepLinkIndex={deepLink}
-            />
-          </View>
-        </HideableView>
+        <FadableView style={styles.contentCatalog} duration={300} >
+          <Image source={remoteUri} style={styles.backgroundPicture} resizeMode='cover' opacity={isBigPicVisible?1:0} fadeDuration={100}/>
+          <Image source={overlayUri} style={styles.foregroundPicture} resizeMode='cover' />
+          <ContentDescription style={styles.contentDescription} headerText={title} bodyText={description} />
+          <ContentScroll style={styles.contentScroll} onSelectedIndexChange={this.handleSelectedIndexChange} selectedIndex={index} />
+        </FadableView>
       );
     }
     catch(error)
     {
-        console.error(error);
+        console.error(`ContentCatalog.render(): ERROR ${error.toString()}`);
     }
   }
 }
 
-const styles = StyleSheet.create({
-  page: {
+ContentCatalog.propTypes = {
+  selectedIndex: PropTypes.number.isRequired,
+};
+
+const styles = StyleSheet.create(
+{
+  contentCatalog:
+  {
     width: width,
-    height: height
+    height: height,
+    position: 'absolute',
   },
-  cell: {
-    backgroundColor: 'black'
-  }
+
+  contentDescription: 
+  {
+    left: '5%',
+    width: '45%',
+    top: '10%',
+    height: '60%',
+    position: 'absolute',
+  },
+
+  backgroundPicture:
+  {
+    left: '30%',
+    width: '70%',
+    height: '70%',
+    position: 'absolute',
+  },
+  foregroundPicture:
+  {
+    left: '30%',
+    width: '70%',
+    height: '70%',
+    position: 'absolute',
+  },
+  contentScroll:
+  {
+    left: '3%',
+    width: '97%',
+    top: '70%',
+    height: '30%',
+    position: 'absolute',
+  },
 });

@@ -1,39 +1,55 @@
 'use strict';
-import React from 'react';
-import { View, Text, ActivityIndicator,StyleSheet, } from 'react-native';
+import React, {Component} from 'react';
+import { Text, ActivityIndicator,StyleSheet, Dimensions} from 'react-native';
+import PropTypes from 'prop-types'
 
-import HideableView from './HideableView';
+import FadableView from './FadableView';
 
-const styles = StyleSheet.create({
-  notification: {
-    height: "100%", 
-    justifyContent: "center", 
-    alignItems: "center", 
-    backgroundColor: "black"
-  }});
+const width = Dimensions.get('window').width;
+const height = Dimensions.get('window').height;
 
-export default class InProgressView extends React.Component {
+export default class InProgressView extends Component {
+
+  static defaultProps =
+    {
+      messageText: 'Patience is a virtue, Boy!',
+      fadeAway: false,
+    };
+
   constructor(props) {
     super(props);
   }
   
   render() {
-    const fadeduration = 300;
-    const isVisible = this.props.visible;
-    const message = this.props.messageText;
+    try
+    {
+      console.log(`InProgressView.render(): done fadeAway '${this.props.fadeAway}' msg '${this.props.messageText}'`);
 
-    console.debug(`InProgressView.render(): visible ${isVisible}`)
-    return (
-      <View style={[styles.notification]}>
-        <View style={{ width: 200, height: 200 }}>
-          <HideableView visible={isVisible} duration={fadeduration}>
-            <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: '#000000', opacity: 0.6 }}>
-              <ActivityIndicator style={{ left: 0, top: -10 }} size='large' color='#00ff00' />
-              <Text style={{ left: 0, top: 10, color: '#00ff00', fontSize: 18, fontWeight: 'bold' }}>{message}</Text>
-            </View>
-          </HideableView>
-        </View>
-      </View>      
-    );
+      return (
+        <FadableView style={styles.notification} fadeAway={this.props.fadeAway} duration={300} nameTag='InProgress' >
+          <ActivityIndicator style={{ left: 0, top: -10 }} size='large' color='#00ff00' />
+          <Text style={{ left: 0, top: 10, color: '#00ff00', fontSize: 18, fontWeight: 'bold' }}>{this.props.messageText}</Text> 
+        </FadableView>
+      );
+    }
+    catch(error)
+    {
+      console.debug(`InProgressView.render(): ERROR ${error}`);
+    }
   }
 }
+
+InProgressView.propTypes = {
+  messageText: PropTypes.string,
+  fadeAway: PropTypes.bool,
+};
+
+const styles = StyleSheet.create({
+  notification: {
+    width: width,
+    height: height,
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    backgroundColor: 'rgba(35, 35, 35, 0.5)',
+  }
+});

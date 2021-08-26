@@ -7,209 +7,170 @@
 'use strict'
 import React, {Component} from 'react';
 import {
-  StyleSheet,
-  View,
   AppRegistry,
   NativeModules,
   NativeEventEmitter,
-  Dimensions,
-  NavigationExperimental,
-  DeviceEventEmitter
 } from 'react-native';
 
-import ContentCatalog from './src/views/ContentCatalog';
-import PlaybackView from './src/views/PlaybackView';
-import ResourceLoader from "./src/ResourceLoader";
-import InProgressView from "./src/views/InProgressView";
-import NotificationPopup from "./src/views/NotificationPopup";
 
-const {
-  CardStack: NavigationCardStack,
-  StateUtils: NavigationStateUtils
-} = NavigationExperimental;
+import ResourceLoader from './src/ResourceLoader';
+import RenderScene from './src/views/RenderScene'; 
+import RenderView from './src/views/RenderView';
 
-function createReducer(initialState) {
-  return (currentState = initialState, action) => {
-    switch (action.type) {
-      case 'forward':
-        return NavigationStateUtils.forward(currentState);
-      case 'back':
-        return NavigationStateUtils.back(currentState);
-      case 'push':
-        return NavigationStateUtils.push(currentState, {key: action.key});
-      case 'pop':
-        return currentState.index > 0 ?
-          NavigationStateUtils.pop(currentState) :
-          currentState;
-      default:
-        return currentState;
-    }
-  }
+const initialModal = RenderView.viewInProgress;
+initialModal.args = {messageText: 'Getting... ready'};
+const initialScene = { modalView: initialModal };
+const invalidIndex = -1;
+
+function getClipIndexFromDeepLink(deepLink) 
+{
+  console.log(`getClipIndexFromDeepLink(): Processing deep link url ${deepLink.url}`);
+
+  const index = ResourceLoader.clipsData.findIndex(e => e.url === deepLink.url);
+  if (index == invalidIndex) 
+    console.log(`getClipIndexFromDeepLink(): Url ${deepLink.url} index not found`);
+
+  return index;
 }
 
-const NavReducer = createReducer({
-  index: 0,
-  key: 'App',
-  routes: [{key: 'ContentCatalog'}]
-});
+export default class JuvoReactNative extends Component 
+{
+  constructor(props) 
+  {
+    console.debug('JuvoReactNative.constructor():');
 
-export default class JuvoReactNative extends Component {
-  constructor(props) {
     super(props);
-    this.state = {
-      loading: true,
-      navState: NavReducer(undefined, {}),
-    };
-    this.selectedClipIndex = 0;
-    this.deepLinkIndex = 0;
-
-    this.switchComponentsView = this.switchComponentsView.bind(this);
-    this.handleSelectedIndexChange = this.handleSelectedIndexChange.bind(this);
-    this.handleDeepLink = this.handleDeepLink.bind(this);
-    this.onTVKeyDown = this.onTVKeyDown.bind(this);
-    this.currentView = this.currentView.bind(this);
-    this.finishLoading = this.finishLoading.bind(this);
-    this.renderProgress = this.renderProgress.bind(this);
     this.JuvoPlayer = NativeModules.JuvoPlayer;
+        
+    this.handleDeepLink = this.handleDeepLink.bind(this);
+    this.playClipIndex = this.playClipIndex.bind(this);
+    this.completeInitalization = this.completeInitalization.bind(this);
+
+    this.loadingPromise = ResourceLoader.load();
+    this.initializationPromise = null;
+    this.JuvoEventEmitter = null;
+    
+    console.debug('JuvoReactNative.constructor(): done');
+  };
+
+  componentDidMount()
+  {
+    console.debug('JuvoReactNative.componentDidMount():');
     this.JuvoEventEmitter = new NativeEventEmitter(this.JuvoPlayer);
-    this.LoadingPromise = ResourceLoader.load();
-  }
-
-  onTVKeyDown(pressed) {
-    DeviceEventEmitter.emit(`${this.currentView()}/onTVKeyDown`, pressed);
-  }
-
-  async componentDidMount() {
-    this.JuvoEventEmitter.addListener("onTVKeyDown", this.onTVKeyDown);
-    this.JuvoEventEmitter.addListener("handleDeepLink", async (deepLink)=> 
+    this.initializationPromise = this.completeInitalization();
+    setImmediate(async ()=> 
     {
-      await this.handleDeepLink(deepLink);
+      try
+      {
+        await this.initializationPromise;
+      }
+      catch(error)
+      {
+        console.error(`JuvoReactNative.componentDidMount(): ERROR ${error}`);
+        const errorPopup = RenderView.viewPopup;
+        errorPopup.args = {messageText: 'Failed to initialize'};
+        RenderScene.setScene(RenderView.viewCurrent, errorPopup);
+      }
+      this.initializationPromise = null;
+    });
+
+    console.debug('JuvoReactNative.componentDidMount(): done');
+  }
+
+  async componentWillUnmount()
+  {
+    console.debug('JuvoReactNative.componentWillUnmount():');
+
+    // await mount completion if running to cleanup event subscriptions.
+    const initInProgress = this.initializationPromise;
+    if(initInProgress)
+      await initInProgress;
+
+    this.JuvoEventEmitter.removeAllListeners('handleDeepLink');
+    delete this.JuvoEventEmitter;
+
+    console.debug('JuvoReactNative.componentWillUnmount(): done');
+  }
+
+  async completeInitalization()
+  {
+    console.debug('JuvoReactNative.completeInitalization():');
+
+    if(this.loadingPromise)
+    {
+      await this.loadingPromise;
+      this.loadingPromise = null;
+    }
+
+    this.JuvoEventEmitter.addListener('handleDeepLink', deepLink => 
+    {
+      setImmediate(this.handleDeepLink,deepLink);
     });
 
     this.JuvoPlayer.AttachDeepLinkListener();
-    await this.finishLoading();
-  }
 
-  async finishLoading() {
-    await this.LoadingPromise;
-    this.setState({loading: false});
+    console.debug('JuvoReactNative.completeInitalization(): done');
   }
-
-  currentView()
+ 
+  playClipIndex(index)
   {
-    return this.state.navState.routes[this.state.navState.index].key;
+    const playbackView = RenderView.viewPlayback;
+    playbackView.args = {selectedIndex:index};
+
+    const inProgressView = RenderView.viewInProgress;
+    inProgressView.args = {messageText: `Starting '${ResourceLoader.clipsData[index].title}'`};
+
+    RenderScene.setScene(playbackView, inProgressView);
+  
+    console.log('JuvoReactNative.playClipIndex(): done.');
   }
+  
+  handleDeepLink(deepLink)
+  {
+    console.debug('JuvoReactNative.handleDeepLink():');
 
-//It is assumed that at the only one component can be visible on the screen
-  switchComponentsView(componentName) {
-
-    let actionRes = false;
-
-    switch (componentName) {
-      case 'Previous':
-        actionRes = this.handleAction({type: 'pop'});
-        break;
-      case 'PlaybackView':
-        actionRes = this.handleAction({type: 'push', key: 'PlaybackView'});
-        break;
-      default:
-        alert('Undefined view');
-    }
-
-    console.log(`JuvoReactNative.switchComponentsView(): ${componentName} switched ${actionRes}`);
-    this.setState({});
-  }
-
-  handleSelectedIndexChange(index) {
-    this.selectedClipIndex = index;
-  }
-
-  async handleDeepLink(deepLink) {
-    if (deepLink.url !== null) {
-      if (this.state.loading) {
-        console.log(`JuvoReactNative.handleDeepLink(): Url ${deepLink.url} waiting for load completion`);
-        await this.LoadingPromise;
-      }
-
-      let index = ResourceLoader.clipsData.findIndex(e => e.url === deepLink.url);
-      if (index !== -1) {
-        console.log(`JuvoReactNative.handleDeepLink(): Processing deep link url ${deepLink.url}`);
-        this.deepLinkIndex = index;
-        this.handleSelectedIndexChange(index);
-        this.switchComponentsView('PlaybackView');
+    if(deepLink.url == '')
+    {
+      const currentScene = RenderScene.getScene();
+      
+      if(currentScene.mainView.name == RenderView.viewNone.name)
+      {
+        // Have nothing, show default content catalog.
+        console.log('JuvoReactNative.handleDeepLink(): empty url. Showing default content catalog.');
+        const contentSelection = RenderView.viewContentCatalog;
+        contentSelection.args = {selectedIndex: 0};
+        RenderScene.setScene(contentSelection,RenderView.viewCurrent);
       }
       else
       {
-        console.log(`JuvoReactNative.handleDeepLink(): Url ${deepLink.url} index not found`);
+        // Have something, don't change it.
+        console.log(`JuvoReactNative.handleDeepLink(): empty url. Showing main '${currentScene.mainView.name}' modal '${currentScene.modalView.name}'`);
+        RenderScene.setScene(RenderView.viewCurrent,RenderView.viewCurrent);
       }
     }
-  }
-
-  handleAction(action) {
-    const newState = NavReducer(this.state.navState, action);
-    if (newState === this.state.navState) {
-      return false;
+    else
+    {
+      const index = getClipIndexFromDeepLink(deepLink);
+      if(index == invalidIndex)
+        console.warn(`JuvoReactNative.handleDeepLink(): Url '${deepLink.url}' not found.`);
+      else
+        this.playClipIndex(index);
     }
-    this.setState({
-      navState: newState
-    });
-    return true;
+
+    console.log('JuvoReactNative.handleDeepLink(): done');
   }
 
-  renderProgress() {
-    
-    const showNotification = (ResourceLoader.errorMessage != '');
-    const showInProgress = this.state.loading;
-    console.debug(`JuvoReactNative.renderProgress(): Notification: ${showNotification} InProgrogress: ${showInProgress}`);
-
-    if (showNotification)
-      return (
-        <NotificationPopup visible={true} onNotificationPopupDisappeared={this.JuvoPlayer.ExitApp} messageText={ResourceLoader.errorMessage} />
-      );
-    if (showInProgress)
-      return (
-        <InProgressView visible={true} messageText="Please wait..."/>
-      );
-
-    return null;
-  }
-
-  renderRoute(key) {
-    console.debug(`JuvoReactNative.renderRoute(): ${key}`);
-
-    if (key === 'ContentCatalog') {
-      return <ContentCatalog
-        visible={true}
-        switchView={this.switchComponentsView}
-        onSelectedIndexChange={this.handleSelectedIndexChange}
-        deepLinkIndex={this.deepLinkIndex}/>
+  render()
+  {
+    try
+    {
+      console.debug('JuvoReactNative.render(): done');
+      return ( <RenderScene initialScene={initialScene}/> );
     }
-    if (key === 'PlaybackView') {
-      return <PlaybackView
-        visible={true}
-        switchView={this.switchComponentsView}
-        selectedIndex={this.selectedClipIndex}/>
+    catch(error)
+    {
+      console.error(`JuvoReactNative.render(): ${error}`);
     }
-  }
-
-  renderScene(props) {
-    var progress = this.renderProgress();
-    if (progress)
-      return progress;
-    const ComponentToRender = this.renderRoute(props.scene.route.key);
-    return (
-      ComponentToRender
-    );
-  }
-
-  render() {
-      return (
-        <NavigationCardStack
-          cardStyle={{backgroundColor: 'transparent'}}
-          navigationState={this.state.navState}
-          onNavigate={this.handleAction.bind(this)}
-          renderScene={this.renderScene.bind(this)}/>
-      );
   }
 }
 

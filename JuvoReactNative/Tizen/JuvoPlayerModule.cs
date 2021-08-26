@@ -37,15 +37,11 @@ namespace JuvoReactNative
 {
     public class JuvoPlayerModule : ReactContextNativeModuleBase, ILifecycleEventListener, ISeekLogicClient
     {
-        private Timer _playbackTimer;
-        private readonly SeekLogic _seekLogic = null; // needs to be initialized in the constructor!
-
         private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
 
+        private readonly SeekLogic _seekLogic;
         private EcoreEvent<EcoreKeyEventArgs> _keyDown;
 
-        // assumes StreamType values are sequential [0..N]
-        private readonly List<StreamDescription>[] _allStreamsDescriptions = new List<StreamDescription>[Enum.GetValues(typeof(StreamType)).Length];
         public IPlayerService Player { get; private set; }
         private IDisposable _seekCompletedSub;
         private IDisposable _playbackErrorsSub;
@@ -54,7 +50,6 @@ namespace JuvoReactNative
         private IDisposable _eosSub;
         private readonly IDeepLinkSender _deepLinkSender;
         private readonly SynchronizationContext _mainSynchronizationContext;
-        private static readonly TimeSpan TimedDataUpdateInterval = TimeSpan.FromMilliseconds(100);
 
         public JuvoPlayerModule(ReactContext reactContext, IDeepLinkSender deepLinkSender,
             SynchronizationContext mainSynchronizationContext)
@@ -64,8 +59,6 @@ namespace JuvoReactNative
             _deepLinkSender = deepLinkSender;
             _mainSynchronizationContext = mainSynchronizationContext;
         }
-
-        
 
         private void OnDeepLinkReceived(string url)
         {
@@ -93,7 +86,6 @@ namespace JuvoReactNative
             Context.GetJavaScriptModule<RCTDeviceEventEmitter>().emit(eventName, parameters);
         }
 
-
         public override void Initialize()
         {
             using (LogScope.Create())
@@ -109,21 +101,6 @@ namespace JuvoReactNative
                     param.Add("KeyCode", e.KeyCode);
                     Context.RunOnNativeModulesQueueThread(() => SendEvent("onTVKeyDown", param));
                 };
-            }
-        }
-
-        private void ResumeTimedDataUpdate()
-        {
-            using (LogScope.Create())
-                _playbackTimer.Change(TimeSpan.Zero, TimedDataUpdateInterval); //resume update
-        }
-
-        private void SuspendTimedDataUpdate()
-        {
-            using (LogScope.Create())
-            {
-                _playbackTimer.Change(Timeout.Infinite, Timeout.Infinite); //suspend update
-                UpdateTimedData(); // Push out current (last known) timed data
             }
         }
 
@@ -143,8 +120,6 @@ namespace JuvoReactNative
             {
                 DisposePlayerSubscribers();
                 _seekCompletedSub.Dispose();
-                _playbackTimer.Dispose();
-                _playbackTimer = null;
                 Player.Dispose();
                 Player = null;
                 Logger.Info("PlayerService kicked the bucket");
@@ -171,7 +146,6 @@ namespace JuvoReactNative
                     try
                     {
                         await Player.Resume();
-                        ResumeTimedDataUpdate();
                     }
                     catch
                     {
@@ -194,7 +168,6 @@ namespace JuvoReactNative
                         return;
 
                     _seekLogic.Reset();
-                    SuspendTimedDataUpdate();
                     await Player.Suspend();
                 });
             }
@@ -208,22 +181,8 @@ namespace JuvoReactNative
             Context.RunOnNativeModulesQueueThread(() => SendEvent("onUpdateBufferingProgress", param));
         }
 
-        private void UpdateTimedData(object _ = default)
-        {
-            Context.RunOnNativeModulesQueueThread(() =>
-            {
-                var txt = Player?.CurrentCueText ?? string.Empty;
-                var param = new JObject();
-                param.Add("Total", (int)_seekLogic.Duration.TotalMilliseconds);
-                param.Add("Current", (int)_seekLogic.CurrentPositionUI.TotalMilliseconds);
-                param.Add("SubtiteText", txt);
-                SendEvent("onUpdatePlayTime", param);
-            });
-        }
-
         private void InitialisePlayback()
         {
-            _playbackTimer = new Timer(UpdateTimedData, default, Timeout.Infinite, Timeout.Infinite);
             _seekCompletedSub = _seekLogic.SeekCompleted().Subscribe(_ =>
                 Context.RunOnNativeModulesQueueThread(() => SendEvent("onSeekCompleted", new JObject())));
 
@@ -243,75 +202,49 @@ namespace JuvoReactNative
         }
 
         //////////////////JS methods//////////////////
+        /// NOTES:
+        /// - All JS to Native calls are async.
+        //////////////////////////////////////////////
         [ReactMethod]
         public async void GetStreamsDescription(int streamTypeIndex, IPromise promise)
         {
-            async Task<List<StreamDescription>> GetStreamsDescriptionInternal(int streamIndex, StreamType streamType)
+            using (LogScope.Create())
             {
-                Logger.Info($"{streamType}");
-
-                if (streamType == StreamType.Subtitle)
+                try
                 {
-                    _allStreamsDescriptions[streamIndex] = new List<StreamDescription>
-                    {
-                        new StreamDescription
-                        {
-                            Default = true,
-                            Description = "off",
-                            Id = "off",
-                            StreamType = streamType
-                        }
-                    };
+                    var streamType = (StreamType)streamTypeIndex;
+                    var streams = await Player.GetStreamsDescription(streamType);
 
-                    _allStreamsDescriptions[streamIndex].AddRange(await Player.GetStreamsDescription(streamType));
+                    var streamLabel = streamType.ToString();
+                    var res = new JObject();
+                    res.Add(streamLabel, Newtonsoft.Json.JsonConvert.SerializeObject(streams));
+                    res.Add("streamLabel", streamLabel);
+
+                    promise.Resolve(res);
                 }
-                else
+                catch (Exception e)
                 {
-                    _allStreamsDescriptions[streamIndex] = await Player.GetStreamsDescription(streamType);
+                    promise.Reject(e.GetType().ToString(), e.Message);
+                    Logger.Error(e);
                 }
-
-                return _allStreamsDescriptions[streamIndex];
-            }
-
-            try
-            {
-                var streams = await GetStreamsDescriptionInternal(streamTypeIndex, (StreamType)streamTypeIndex)
-                    .ConfigureAwait(false);
-                var param = new JObject();
-                param.Add("Description", Newtonsoft.Json.JsonConvert.SerializeObject(streams));
-                param.Add("StreamTypeIndex", streamTypeIndex);
-                promise.Resolve(param);
-            }
-            catch (Exception e)
-            {
-                promise.Reject(e.Message, e);
             }
         }
 
         [ReactMethod]
-        public async void SetStream(int selectionIndex, int streamTypeIndex, IPromise promise)
+        public async void SetStream(int groupIndex, int formatIndex, IPromise promise)
         {
-            async Task<PlayerState> SetStreamInternal(StreamDescription targetStream)
+            using (LogScope.Create())
             {
-                if (targetStream.StreamType == StreamType.Subtitle && targetStream.Id == "off")
-                    Player.DeactivateStream(StreamType.Subtitle);
-                else
-                    await Player.ChangeActiveStream(targetStream);
-
-                return Player.State;
-            }
-
-            try
-            {
-                var playerState = _allStreamsDescriptions[streamTypeIndex] != null && selectionIndex != -1
-                    ? await SetStreamInternal(_allStreamsDescriptions[streamTypeIndex][selectionIndex]).ConfigureAwait(false)
-                    : Player.State;
-
-                promise.Resolve(playerState.ToString());
-            }
-            catch (Exception e)
-            {
-                promise.Reject(e.Message, e);
+                try
+                {
+                    await Player.ChangeActiveStream(groupIndex, formatIndex).ConfigureAwait(false);
+                    promise.Resolve(default);
+                }
+                catch (Exception e)
+                {
+                    promise.Reject(e.GetType().ToString(), e.Message);
+                    Logger.Error(e);
+                }
             }
         }
 
@@ -337,16 +270,15 @@ namespace JuvoReactNative
                 });
 
                 await Player.Start();
-                ResumeTimedDataUpdate();
             }
 
             if (string.IsNullOrWhiteSpace(videoURI))
             {
-                promise.Reject("empty URI", new ArgumentException());
+                promise.Reject("uri", "not specified");
             }
             else if (string.IsNullOrWhiteSpace(streamingProtocol))
             {
-                promise.Reject("empty protocol", new ArgumentException());
+                promise.Reject("uri", "protocol not specified");
             }
             else
             {
@@ -361,16 +293,29 @@ namespace JuvoReactNative
                 }
                 catch (Exception e)
                 {
-                    promise.Reject(e.Message, e);
+                    promise.Reject(e.GetType().ToString(), e.Message);
                 }
             }
         }
 
         [ReactMethod]
-        public void StopPlayback()
+        public void StopPlayback(IPromise promise)
         {
-            Logger.Info();
-            TerminatePlayerService();
+            using (LogScope.Create())
+            {
+                try
+                {
+                    TerminatePlayerService();
+                }
+                catch (Exception e)
+                {
+                    // Inform but don't fail. Decouples player state from UI.
+                    Logger.Warn(e.Message);
+                }
+
+                // Don't pass "failed/sucess" to JS. Promise is used purely as operation completion.
+                promise.Resolve(default);
+            }
         }
 
         [ReactMethod]
@@ -384,12 +329,10 @@ namespace JuvoReactNative
                 {
                     case PlayerState.Playing:
                         pauseResumeTask = Player.Pause();
-                        SuspendTimedDataUpdate();
                         break;
 
                     case PlayerState.Paused:
                         pauseResumeTask = Player.Start();
-                        ResumeTimedDataUpdate();
                         break;
 
                     default:
@@ -408,40 +351,68 @@ namespace JuvoReactNative
             }
             catch (Exception e)
             {
-                promise.Reject(e.Message, e);
+                promise.Reject(e.GetType().ToString(), e.Message);
             }
         }
 
         [ReactMethod]
         public void Forward()
         {
-            _seekLogic.SeekForward();
+            using (LogScope.Create())
+                _seekLogic.SeekForward();
         }
 
         [ReactMethod]
         public void Rewind()
         {
-            _seekLogic.SeekBackward();
+            using (LogScope.Create())
+                _seekLogic.SeekBackward();
         }
 
         [ReactMethod]
         public void AttachDeepLinkListener()
         {
             using (LogScope.Create())
-            {
                 _deepLinkSub = _deepLinkSender
                     .DeepLinkReceived()
                     .Subscribe(OnDeepLinkReceived, OnDeepLinkClosed);
-            }
         }
 
         [ReactMethod]
         public void ExitApp()
         {
             using (LogScope.Create())
-            {
-                //Context.RemoveLifecycleEventListener(this);
                 _mainSynchronizationContext.Post(_ => Application.Current.Exit(), null);
+        }
+
+        [ReactMethod]
+        public void GetPlaybackInfo(IPromise promise)
+        {
+            try
+            {
+                var position = (int)_seekLogic.CurrentPositionUI.TotalSeconds;
+                var duration = (int)_seekLogic.Duration.TotalSeconds;
+                var isPlaying = Player.State == PlayerState.Playing;
+
+                promise.Resolve(new JObject
+                {
+                    {"position", position},
+                    {"duration", duration},
+                    {"isPlaying", isPlaying}
+                });
+            }
+            catch (Exception e)
+            {
+                // Will be raised if called prior to playback setup & start.
+                // Don't penalise such use case, just inform. Decouples "current state" dependency from UI.
+                Logger.Warn(e.Message);
+
+                promise.Resolve(new JObject
+                {
+                    {"position", 0},
+                    {"duration", 0},
+                    {"isPlaying", false}
+                });
             }
         }
     }

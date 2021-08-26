@@ -1,83 +1,102 @@
+'use strict';
 import React, { Component } from 'react';
-import { View, Text, NativeModules, NativeEventEmitter,StyleSheet, } from 'react-native';
+import { View, Text, Dimensions,StyleSheet,DeviceEventEmitter } from 'react-native';
+import PropTypes from 'prop-types'
 
-import HideableView from './HideableView';
+import RenderScene from './RenderScene';
+import RenderView from './RenderView';
+import FadableView from './FadableView';
 
-const styles = StyleSheet.create({
-  notification: {
-    height: "100%", 
-    justifyContent: "center", 
-    alignItems: "center", 
-    backgroundColor: "black"
-  }
-});
+const width = Dimensions.get('window').width;
+const height = Dimensions.get('window').height;
 
-export default class NotificationPopup extends Component {
-  constructor(props) {
+export default class NotificationPopup extends Component 
+{
+  static defaultProps =
+  {
+    messageText: `Ain't saying a word without my lawey!`,
+    fadeAway: false,
+  };
+
+  constructor(props) 
+  {
     super(props);
-    this.state = {};
-    this.JuvoPlayer = NativeModules.JuvoPlayer;
-    this.JuvoEventEmitter = new NativeEventEmitter(this.JuvoPlayer);
-    this.keysListenningOff = true;
     this.onTVKeyDown = this.onTVKeyDown.bind(this);
-    this.handleConfirm = this.handleConfirm.bind(this);
   }
   
-  componentWillMount() {
-    this.JuvoEventEmitter.addListener('onTVKeyDown', this.onTVKeyDown);
+  componentDidMount() 
+  {
+    DeviceEventEmitter.addListener('NotificationPopup/onTVKeyDown', this.onTVKeyDown);
+    console.debug('NotificationPopup.componentDidMount(): done');
   }
 
-  componentWillReceiveProps(nextProps) {
-    this.keysListenningOff = !nextProps.visible;
+  componentWillUnmount() 
+  { 
+    DeviceEventEmitter.removeAllListeners('NotificationPopup/onTVKeyDown'); 
+    console.debug('NotificationPopup.componentWillUnmount(): done');
   }
-
+  
   onTVKeyDown(pressed) {
-    if (this.keysListenningOff) return;
+    console.debug(`NotificationPopup.onTVKeyDown(): '${pressed.KeyName}'`);
     switch (pressed.KeyName) {
-      case 'Right':
-        break;
-      case 'Left':
-        break;
       case 'Return':
       case 'XF86AudioPlay':
       case 'XF86PlayBack':
       case 'XF86Back':
-      case 'XF86AudioStop':
-        this.handleConfirm();
+      case 'XF86AudioStop':        
+        RenderScene.setScene(RenderView.viewCurrent, RenderView.viewNone);
         break;
-      case 'Up':
-        break;
+
+      default:
+        console.debug(`NotificationPopup.onTVKeyDown(): key '${pressed.KeyName}' ignored`);
+        return;
     }
+
+    console.log(`NotificationPopup.onTVKeyDown(): key '${pressed.KeyName}' processed`);
   }
 
-  handleConfirm() {
-    this.keysListenningOff = true;
-    this.props.onNotificationPopupDisappeared();
-  }
-
-  render() {
-    const fadeduration = 300;
-    const message = this.props.messageText
+  render() 
+  {
     return (
-      <View style={[styles.notification]}>
-        <View style={{ width: 850, height: 430 }}>
-          <HideableView visible={this.props.visible} duration={fadeduration}>
-            <View
-              style={{
-                width: '100%',
-                height: '100%',
-                justifyContent: 'space-around',
-                alignItems: 'center',
-                padding: 5,
-                backgroundColor: '#ffffff',
-                opacity: 0.8
-              }}>
-              <Text style={{ fontSize: 40, color: '#000000', textAlign: 'center' }}> {message} </Text>
-              <Text style={{ fontSize: 20, color: '#000000', textAlign: 'center' }}> Press enter or return key to close </Text>
-            </View>
-          </HideableView>
+      <FadableView style={styles.notification} fadeAway={this.props.fadeAway} duration={300} nameTag='NotificationPopup' >
+        <View style={styles.messageBox}>
+          <Text style={styles.messageText}>{this.props.messageText}</Text>
+          <Text style={styles.instructionText}>Press enter or return key to close</Text>
         </View>
-      </View>
+      </FadableView>
     );
   }
 }
+
+NotificationPopup.propTypes = {
+  messageText: PropTypes.string,
+  fadeAway: PropTypes.bool,
+};
+
+const styles = StyleSheet.create({
+  notification: {
+    width: width,
+    height: height,
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    backgroundColor: 'rgba(35, 35, 35, 0.5)',
+  },
+  messageBox: {
+    width: 850,
+    height: 430,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    padding: 5,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+  },
+  messageText: {
+    fontSize: 40,
+    color: '#000000', 
+    textAlign: 'center',
+  },
+  instructionText: {
+    fontSize: 20,
+    color: '#000000',
+    textAlign: 'center',
+  }
+});
