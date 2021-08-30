@@ -99,10 +99,29 @@ namespace PlayerService
             {
                 // Terminate subjects on player thread. Any pending thread jobs will handle terminated subjects,
                 // _playerStateSubject in particular, gracefully.
+                LogRn.Info("Disposing event subscription");
+                _playerEventSubscription?.Dispose();
+                _playerEventSubscription = default;
+
+                if (_player != null)
+                {
+                    try
+                    {
+                        LogRn.Info("Dispoing player");
+                        await _player.DisposeAsync();
+                    }
+                    catch (Exception e)
+                    {
+                        LogRn.Warn($"Ignoring exception: {e}");
+                    }
+                }
+
+                LogRn.Info("Completing event subjects");
                 _errorSubject.OnCompleted();
                 _bufferingSubject.OnCompleted();
                 _endOfStream.OnCompleted();
 
+                LogRn.Info("Disposing event subjects");
                 _errorSubject.Dispose();
                 _bufferingSubject.Dispose();
                 _endOfStream.Dispose();
@@ -110,24 +129,6 @@ namespace PlayerService
                 _errorSubject = null;
                 _bufferingSubject = null;
                 _endOfStream = null;
-
-                LogRn.Info("Disposed event subjects");
-                if (_player != null)
-                {
-                    try
-                    {
-                        _playerEventSubscription.Dispose();
-                        _playerEventSubscription = default;
-
-                        await _player.DisposeAsync();
-                        LogRn.Info("Disposed player");
-
-                    }
-                    catch (Exception e)
-                    {
-                        LogRn.Warn($"Ignoring exception: {e}");
-                    }
-                }
             }
 
             using (LogScope.Create())
@@ -136,6 +137,7 @@ namespace PlayerService
                 await job.ConfigureAwait(false);
             }
         }
+
 
         private void OnEvent(IEvent ev)
         {
@@ -190,7 +192,10 @@ namespace PlayerService
         {
             using (LogScope.Create())
             {
-                WaitHandle.WaitAll(new[] { ((IAsyncResult)TerminatePlayer()).AsyncWaitHandle });
+                new Task(async () => await TerminatePlayer().ConfigureAwait(false), CancellationToken.None, TaskCreationOptions.DenyChildAttach).RunSynchronously();
+                
+                //WaitHandle.WaitAll(new[] { ((IAsyncResult)TerminatePlayer()).AsyncWaitHandle });
+                LogRn.Info("Waiting player thread join");
                 _playerThread.Join();
             }
         }
