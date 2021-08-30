@@ -24,6 +24,7 @@ using System.Threading.Tasks;
 using Nito.AsyncEx;
 using UI.Common;
 using System.Reactive.Subjects;
+using System.Reactive.Threading.Tasks;
 using System.Threading;
 using JuvoPlayer;
 using JuvoPlayer.Common;
@@ -151,12 +152,39 @@ namespace PlayerService
                     case BufferingEvent buf:
                         _bufferingSubject?.OnNext(buf.IsBuffering ? 0 : 100);
                         break;
+
+                    case ExceptionEvent ex:
+                        var errMsg = $"{ex.Exception.Message} {ex.Exception.InnerException?.Message}";
+                        LogRn.Error(errMsg);
+                        break;
                 }
             }
         }
 
         private static IDisposable SubscribePlayerEvents(IPlayer player, Action<IEvent> handler) =>
             player.OnEvent().Subscribe(handler);
+
+        private static async Task PrepareWithCancellation(IPlayer player)
+        {
+            using (LogScope.Create())
+            {
+                using (var cts = new CancellationTokenSource())
+                {
+                    var errorTask = player
+                        .OnEvent()
+                        .FirstAsync(ev => ev is ExceptionEvent)
+                        .Select(ev => (ev as ExceptionEvent).Exception)
+                        .ToTask(cts.Token);
+                    var prepareTask = player.Prepare();
+                    var firstCompleted = await Task.WhenAny(errorTask, prepareTask);
+                    if (firstCompleted == errorTask)
+                    {
+                        cts.Cancel();
+                        throw errorTask.Result;
+                    }
+                }
+            }
+        }
 
         public void Dispose()
         {
@@ -272,7 +300,7 @@ namespace PlayerService
                 {
                     _player = BuildDashPlayer(source);
                     _playerEventSubscription = SubscribePlayerEvents(_player, OnEvent);
-                    await _player.Prepare();
+                    await PrepareWithCancellation(_player);
                     LogRn.Info(_player.State.ToString());
 
                 }
