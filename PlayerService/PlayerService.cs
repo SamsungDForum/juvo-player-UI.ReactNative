@@ -129,23 +129,29 @@ namespace PlayerService
                 }
             }
 
-            var job = await _playerThread.ThreadJob(TerminateJob).ConfigureAwait(false);
-            await job.ConfigureAwait(false);
+            using (LogScope.Create())
+            {
+                var job = await _playerThread.ThreadJob(TerminateJob).ConfigureAwait(false);
+                await job.ConfigureAwait(false);
+            }
         }
 
         private void OnEvent(IEvent ev)
         {
-            LogRn.Info(ev.ToString());
-
-            switch (ev)
+            using (LogScope.Create())
             {
-                case EosEvent _:
-                    _endOfStream?.OnNext(Unit.Default);
-                    break;
+                LogRn.Info(ev.ToString());
 
-                case BufferingEvent buf:
-                    _bufferingSubject?.OnNext(buf.IsBuffering ? 0 : 100);
-                    break;
+                switch (ev)
+                {
+                    case EosEvent _:
+                        _endOfStream?.OnNext(Unit.Default);
+                        break;
+
+                    case BufferingEvent buf:
+                        _bufferingSubject?.OnNext(buf.IsBuffering ? 0 : 100);
+                        break;
+                }
             }
         }
 
@@ -169,11 +175,14 @@ namespace PlayerService
                 LogRn.Info(_player.State.ToString());
             }
 
-            var job = await _playerThread
-                .ThreadJob(() => PauseJob().ReportException(_errorSubject, _pauseFailMessage))
-                .ConfigureAwait(false);
+            using (LogScope.Create())
+            {
+                var job = await _playerThread
+                    .ThreadJob(() => PauseJob().ReportException(_errorSubject, _pauseFailMessage))
+                    .ConfigureAwait(false);
 
-            await job.ConfigureAwait(false);
+                await job.ConfigureAwait(false);
+            }
         }
 
         public async Task SeekTo(TimeSpan to)
@@ -184,11 +193,14 @@ namespace PlayerService
                 LogRn.Info($"Seeked to: {seekTo}");
             }
 
-            var job = await _playerThread
-                .ThreadJob(() => SeekJob(to).ReportException(_errorSubject, _seekFailMessage))
-                .ConfigureAwait(false);
+            using (LogScope.Create())
+            {
+                var job = await _playerThread
+                    .ThreadJob(() => SeekJob(to).ReportException(_errorSubject, _seekFailMessage))
+                    .ConfigureAwait(false);
 
-            await job.ConfigureAwait(false);
+                await job.ConfigureAwait(false);
+            }
         }
 
         public async Task ChangeActiveStream(int groupIdx, int formatIdx)
@@ -211,11 +223,15 @@ namespace PlayerService
                 await _player.SetStreamGroups(groups, selectors);
             }
 
-            var job = await _playerThread
-                .ThreadJob(() => ChangeStreamJob(groupIdx, formatIdx).ReportException(_errorSubject, _changeStreamFailMessage))
-                .ConfigureAwait(false);
+            using (LogScope.Create())
+            {
+                var job = await _playerThread
+                    .ThreadJob(() =>
+                        ChangeStreamJob(groupIdx, formatIdx).ReportException(_errorSubject, _changeStreamFailMessage))
+                    .ConfigureAwait(false);
 
-            await job.ConfigureAwait(false);
+                await job.ConfigureAwait(false);
+            }
         }
 
         public void DeactivateStream(StreamType streamType)
@@ -235,11 +251,14 @@ namespace PlayerService
                     .ToStreamDescription(contentType));
             }
 
-            var job = await _playerThread
-                .ThreadJob(() => GetStreamsJob(streamType.AsContentType()).ReportException(_errorSubject))
-                .ConfigureAwait(false);
+            using (LogScope.Create())
+            {
+                var job = await _playerThread
+                    .ThreadJob(() => GetStreamsJob(streamType.AsContentType()).ReportException(_errorSubject))
+                    .ConfigureAwait(false);
 
-            return await job.ConfigureAwait(false);
+                return await job.ConfigureAwait(false);
+            }
         }
 
         public async Task SetSource(ClipDefinition clip)
@@ -268,17 +287,20 @@ namespace PlayerService
                 }
             }
 
-            if (!clip.Type.Equals("dash", StringComparison.InvariantCultureIgnoreCase))
+            using (LogScope.Create())
             {
-                _errorSubject.OnNext($"Unsupported protocol: {clip.Type}");
-            }
-            else
-            {
-                var job = await _playerThread
-                    .ThreadJob(() => SetSourceJob(clip).ReportException(_errorSubject, _setSourceFailMessage))
-                    .ConfigureAwait(false);
+                if (!clip.Type.Equals("dash", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    _errorSubject.OnNext($"Unsupported protocol: {clip.Type}");
+                }
+                else
+                {
+                    var job = await _playerThread
+                        .ThreadJob(() => SetSourceJob(clip).ReportException(_errorSubject, _setSourceFailMessage))
+                        .ConfigureAwait(false);
 
-                await job.ConfigureAwait(false);
+                    await job.ConfigureAwait(false);
+                }
             }
         }
 
@@ -291,11 +313,14 @@ namespace PlayerService
                 return Task.CompletedTask;
             }
 
-            var job = await _playerThread
-                .ThreadJob(() => StartJob().ReportException(_errorSubject, _startFailMessage))
-                .ConfigureAwait(false);
+            using (LogScope.Create())
+            {
+                var job = await _playerThread
+                    .ThreadJob(() => StartJob().ReportException(_errorSubject, _startFailMessage))
+                    .ConfigureAwait(false);
 
-            await job.ConfigureAwait(false);
+                await job.ConfigureAwait(false);
+            }
         }
 
         public async Task Suspend()
@@ -318,8 +343,11 @@ namespace PlayerService
                 LogRn.Info($"Suspend position: {_suspendTimeIndex}");
             }
 
-            var job = await _playerThread.ThreadJob(SuspendJob).ConfigureAwait(false);
-            await job.ConfigureAwait(false);
+            using (LogScope.Create())
+            {
+                var job = await _playerThread.ThreadJob(SuspendJob).ConfigureAwait(false);
+                await job.ConfigureAwait(false);
+            }
         }
 
         public async Task Resume()
@@ -350,17 +378,20 @@ namespace PlayerService
                 return State;
             }
 
-            if (!_suspendTimeIndex.HasValue)
-                return;
+            using (LogScope.Create())
+            {
+                if (!_suspendTimeIndex.HasValue)
+                    return;
 
-            var job = await _playerThread
-                .ThreadJob(() => ResumeJob().ReportException(_errorSubject, _resumeFailMessage))
-                .ConfigureAwait(false);
-            var resumeState = await job.ConfigureAwait(false);
+                var job = await _playerThread
+                    .ThreadJob(() => ResumeJob().ReportException(_errorSubject, _resumeFailMessage))
+                    .ConfigureAwait(false);
+                var resumeState = await job.ConfigureAwait(false);
 
-            // Suspend/Resume calls are not routed through JS. If playing state is not reached, report an error.
-            if (resumeState != PlayerState.Playing)
-                _errorSubject.OnNext($"Resume failed. State {resumeState}");
+                // Suspend/Resume calls are not routed through JS. If playing state is not reached, report an error.
+                if (resumeState != PlayerState.Playing)
+                    _errorSubject.OnNext($"Resume failed. State {resumeState}");
+            }
         }
 
         public IObservable<string> PlaybackError() => _errorSubject.Publish().RefCount();
