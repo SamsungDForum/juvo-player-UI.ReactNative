@@ -131,7 +131,12 @@ namespace JuvoReactNative
         {
             AppDomain.CurrentDomain.UnhandledException += UnhandledException;
 
-            JuvoLogger.Tizen.TizenLoggerManager.Configure();
+            Log.Logger = new LoggerBuilder()
+                .WithLevel(LogLevel.Debug)
+                .WithChannel("JuvoPlayer")
+                .WithTizenSink()
+                .Build();
+
             JuvoPlayer.Platforms.Tizen.PlatformTizen.Init();
 
             try

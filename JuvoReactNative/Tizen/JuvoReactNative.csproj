@@ -36,7 +36,7 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-	  <PackageReference Include="JuvoPlayer" Version="2.2.0-alpha" />
+	  <PackageReference Include="JuvoPlayer" Version="2.2.0-master-v2.17" />
 	  <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
 	  <PackageReference Include="System.Text.Encoding.CodePages" Version="4.5.0" />
   </ItemGroup>

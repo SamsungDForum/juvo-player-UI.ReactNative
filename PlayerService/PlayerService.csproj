@@ -13,11 +13,8 @@
     <DebugType>None</DebugType>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
-
   <ItemGroup>
-	  <PackageReference Include="JuvoPlayer" Version="2.2.0-alpha" />
-   
-   
+    <PackageReference Include="JuvoPlayer" Version="2.2.0-master-v2.17" />
   </ItemGroup>
 
   <ItemGroup>
