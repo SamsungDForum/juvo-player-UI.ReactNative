@@ -18,16 +18,60 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using JuvoLogger;
 using JuvoPlayer.Common;
 using UI.Common;
 
 namespace PlayerService
 {
+    public static class LogRn
+    {
+        private const string Tag = "JuvoRN";
+
+        public static void Verbose(
+            string message,
+            [CallerFilePath] string file = "",
+            [CallerMemberName] string func = "",
+            [CallerLineNumber] int line = 0)
+            => Tizen.Log.Verbose(Tag, message, file, func, line);
+
+        public static void Debug(
+            string message,
+            [CallerFilePath] string file = "",
+            [CallerMemberName] string func = "",
+            [CallerLineNumber] int line = 0)
+            => Tizen.Log.Debug(Tag, message, file, func, line);
+
+        public static void Info(
+            string message,
+            [CallerFilePath] string file = "",
+            [CallerMemberName] string func = "",
+            [CallerLineNumber] int line = 0)
+            => Tizen.Log.Info(Tag, message, file, func, line);
+
+        public static void Warn(
+            string message,
+            [CallerFilePath] string file = "",
+            [CallerMemberName] string func = "",
+            [CallerLineNumber] int line = 0)
+            => Tizen.Log.Warn(Tag, message, file, func, line);
+
+        public static void Error(
+            string message,
+            [CallerFilePath] string file = "",
+            [CallerMemberName] string func = "",
+            [CallerLineNumber] int line = 0)
+            => Tizen.Log.Error(Tag, message, file, func, line);
+
+        public static void Fatal(
+            string message,
+            [CallerFilePath] string file = "",
+            [CallerMemberName] string func = "",
+            [CallerLineNumber] int line = 0)
+            => Tizen.Log.Error(Tag, message, file, func, line);
+    }
+
     public struct LogScope : IDisposable
     {
-        private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
-
         private string _file;
         private string _method;
         private int _line;
@@ -38,7 +82,7 @@ namespace PlayerService
             [CallerMemberName] string method = "",
             [CallerLineNumber] int line = 0)
         {
-            Logger.Debug($"Enter() -> {msg}", file, method, line);
+            LogRn.Debug($"Enter() -> {msg}", file, method, line);
 
             return new LogScope
             {
@@ -48,13 +92,11 @@ namespace PlayerService
             };
         }
 
-        public void Dispose() => Logger.Debug("Exit() <- ", _file, _method, _line);
+        public void Dispose() => LogRn.Debug("Exit() <- ", _file, _method, _line);
     }
 
     internal static class PlayerServiceToolBox
     {
-        public static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
-
         public const int ThroughputSelection = -1;
         public const string ThroughputDescription = "Auto";
         public const string ThroughputId = @"\ō͡≡o˞̶";
@@ -187,55 +229,52 @@ namespace PlayerService
 
         public static IEnumerable<StreamGroup> DumpStreamGroups(this IEnumerable<StreamGroup> groups)
         {
-            if (Logger.IsLevelEnabled(LogLevel.Debug))
+
+            foreach (var group in groups)
             {
-                foreach (var group in groups)
-                {
-                    Logger.Debug($"Group: {group.ContentType} Entries: {group.Streams.Count}");
-                    group.Streams.DumpStreamInfo();
-                }
+                LogRn.Debug($"Group: {group.ContentType} Entries: {group.Streams.Count}");
+                group.Streams.DumpStreamInfo();
             }
+
 
             return groups;
         }
 
         public static IEnumerable<StreamDescription> DumpStreamDescriptions(this IEnumerable<StreamDescription> descriptions)
         {
-            if (Logger.IsLevelEnabled(LogLevel.Debug))
-            {
-                foreach (var description in descriptions)
-                    Logger.Debug($"Stream: {description}");
-            }
+
+            foreach (var description in descriptions)
+                LogRn.Debug($"Stream: {description}");
+
 
             return descriptions;
         }
 
         public static void DumpFormat(this Format format)
         {
-            Logger.Debug($"Id: {format.Id}");
-            Logger.Debug($"\tLabel: '{format.Label}'");
-            Logger.Debug($"\tSelection Flags: '{format.SelectionFlags}'");
-            Logger.Debug($"\tRole Flags: '{format.RoleFlags}'");
-            Logger.Debug($"\tBitrate: '{format.Bitrate}'");
-            Logger.Debug($"\tCodecs: '{format.Codecs}'");
-            Logger.Debug($"\tContainer MimeType: '{format.ContainerMimeType}'");
-            Logger.Debug($"\tSample MimeType: '{format.SampleMimeType}'");
-            Logger.Debug($"\tWxH: '{format.Width}x{format.Height}'");
-            Logger.Debug($"\tFrame Rate:'{format.FrameRate}'");
-            Logger.Debug($"\tSample Rate: '{format.SampleRate}'");
-            Logger.Debug($"\tChannel Count: '{format.ChannelCount}'");
-            Logger.Debug($"\tSample Rate: '{format.SampleRate}'");
-            Logger.Debug($"\tLanguage: '{format.Language}'");
-            Logger.Debug($"\tAccessibility Channel: '{format.AccessibilityChannel}'");
+            LogRn.Debug($"Id: {format.Id}");
+            LogRn.Debug($"\tLabel: '{format.Label}'");
+            LogRn.Debug($"\tSelection Flags: '{format.SelectionFlags}'");
+            LogRn.Debug($"\tRole Flags: '{format.RoleFlags}'");
+            LogRn.Debug($"\tBitrate: '{format.Bitrate}'");
+            LogRn.Debug($"\tCodecs: '{format.Codecs}'");
+            LogRn.Debug($"\tContainer MimeType: '{format.ContainerMimeType}'");
+            LogRn.Debug($"\tSample MimeType: '{format.SampleMimeType}'");
+            LogRn.Debug($"\tWxH: '{format.Width}x{format.Height}'");
+            LogRn.Debug($"\tFrame Rate:'{format.FrameRate}'");
+            LogRn.Debug($"\tSample Rate: '{format.SampleRate}'");
+            LogRn.Debug($"\tChannel Count: '{format.ChannelCount}'");
+            LogRn.Debug($"\tSample Rate: '{format.SampleRate}'");
+            LogRn.Debug($"\tLanguage: '{format.Language}'");
+            LogRn.Debug($"\tAccessibility Channel: '{format.AccessibilityChannel}'");
         }
 
         public static IEnumerable<StreamInfo> DumpStreamInfo(this IEnumerable<StreamInfo> streamInfos)
         {
-            if (Logger.IsLevelEnabled(LogLevel.Debug))
-            {
-                foreach (var info in streamInfos)
-                    info.Format.DumpFormat();
-            }
+
+            foreach (var info in streamInfos)
+                info.Format.DumpFormat();
+
 
             return streamInfos;
         }

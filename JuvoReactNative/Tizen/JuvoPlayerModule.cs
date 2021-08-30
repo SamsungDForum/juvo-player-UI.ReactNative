@@ -24,8 +24,6 @@ using System.Threading.Tasks;
 using ReactNative;
 using ReactNative.Bridge;
 using JuvoPlayer.Common;
-using JuvoLogger;
-using ILogger = JuvoLogger.ILogger;
 using ElmSharp;
 using ReactNative.Modules.Core;
 using Newtonsoft.Json.Linq;
@@ -33,12 +31,11 @@ using PlayerService;
 using Tizen.Applications;
 using UI.Common;
 
+
 namespace JuvoReactNative
 {
     public class JuvoPlayerModule : ReactContextNativeModuleBase, ILifecycleEventListener, ISeekLogicClient
     {
-        private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
-
         private readonly SeekLogic _seekLogic;
         private EcoreEvent<EcoreKeyEventArgs> _keyDown;
 
@@ -114,7 +111,7 @@ namespace JuvoReactNative
         private void TerminatePlayerService()
         {
             bool havePlayer = Player != null;
-            Logger.Info($"Have player: {havePlayer}");
+            LogRn.Info($"Have player: {havePlayer}");
 
             if (havePlayer)
             {
@@ -122,13 +119,13 @@ namespace JuvoReactNative
                 _seekCompletedSub.Dispose();
                 Player.Dispose();
                 Player = null;
-                Logger.Info("PlayerService kicked the bucket");
+                LogRn.Info("PlayerService kicked the bucket");
             }
         }
 
         void ILifecycleEventListener.OnDestroy()
         {
-            Logger.Info("Unicorn event!");
+            LogRn.Info("Unicorn event!");
         }
 
         void ILifecycleEventListener.OnResume()
@@ -139,7 +136,7 @@ namespace JuvoReactNative
                 {
                     bool havePlayer = Player != null;
 
-                    Logger.Info($"Have player: {havePlayer}");
+                    LogRn.Info($"Have player: {havePlayer}");
                     if (!havePlayer)
                         return;
 
@@ -163,7 +160,7 @@ namespace JuvoReactNative
                 {
                     bool havePlayer = Player != null;
 
-                    Logger.Info($"Have player: {havePlayer}");
+                    LogRn.Info($"Have player: {havePlayer}");
                     if (!havePlayer)
                         return;
 
@@ -225,7 +222,7 @@ namespace JuvoReactNative
                 catch (Exception e)
                 {
                     promise.Reject(e.GetType().ToString(), e.Message);
-                    Logger.Error(e);
+                    LogRn.Error(e.ToString());
                 }
             }
         }
@@ -243,7 +240,7 @@ namespace JuvoReactNative
                 catch (Exception e)
                 {
                     promise.Reject(e.GetType().ToString(), e.Message);
-                    Logger.Error(e);
+                    LogRn.Error(e.ToString());
                 }
             }
         }
@@ -251,7 +248,7 @@ namespace JuvoReactNative
         [ReactMethod]
         public void Log(string message)
         {
-            Logger?.Info(message);
+            LogRn.Info(message);
         }
 
         [ReactMethod]
@@ -310,7 +307,7 @@ namespace JuvoReactNative
                 catch (Exception e)
                 {
                     // Inform but don't fail. Decouples player state from UI.
-                    Logger.Warn(e.Message);
+                    LogRn.Warn(e.Message);
                 }
 
                 // Don't pass "failed/sucess" to JS. Promise is used purely as operation completion.
@@ -405,7 +402,7 @@ namespace JuvoReactNative
             {
                 // Will be raised if called prior to playback setup & start.
                 // Don't penalise such use case, just inform. Decouples "current state" dependency from UI.
-                Logger.Warn(e.Message);
+                LogRn.Warn(e.Message);
 
                 promise.Resolve(new JObject
                 {
@@ -419,8 +416,6 @@ namespace JuvoReactNative
 
     internal static class ContextDump
     {
-        private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
-
         private static void Dump(this ReactContext context)
         {
             string runningOn = string.Empty;
@@ -437,7 +432,7 @@ namespace JuvoReactNative
             if (string.IsNullOrEmpty(runningOn))
                 runningOn = "Unknown";
 
-            Logger.Debug($"Thread: {runningOn}");
+            LogRn.Debug($"Thread: {runningOn}");
         }
     }
 }

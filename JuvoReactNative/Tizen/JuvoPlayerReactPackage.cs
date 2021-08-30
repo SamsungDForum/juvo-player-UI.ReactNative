@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading;
-using JuvoLogger;
 using ReactNative.Bridge;
 using ReactNative.Modules.Core;
 using ReactNative.UIManager;
@@ -10,7 +9,6 @@ namespace JuvoReactNative
 {
     public class JuvoPlayerReactPackage : IReactPackage
     {
-        private ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
         private readonly IDeepLinkSender deepLinkSender;
 
         public JuvoPlayerReactPackage(IDeepLinkSender deepLinkSender)

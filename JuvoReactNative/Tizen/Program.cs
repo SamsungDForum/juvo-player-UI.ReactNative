@@ -4,20 +4,21 @@ using System.Text;
 using System.Net;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using JuvoLogger;
+using JuvoLogger.Tizen;
 using ReactNative;
 using ReactNative.Bridge;
 using ReactNative.Shell;
 using ReactNative.Modules.Core;
-using Log = Tizen.Log;
+
 using Tizen.Applications;
 using UI.Common;
-
+using PlayerService;
 
 namespace JuvoReactNative
 {
     class ReactNativeApp : ReactProgram, IDeepLinkSender
     {
-        public static readonly string Tag = "JuvoRN";
 
         private ReplaySubject<string> deepLinkReceivedSubject = new ReplaySubject<string>(1);
         public override string MainComponentName
@@ -47,7 +48,7 @@ namespace JuvoReactNative
         {
             get
             {
-                Log.Info(Tag, "Packages loading...");
+                LogRn.Info("Packages loading...");
                 return new List<IReactPackage>
                 {
                     new MainReactPackage(),
@@ -73,51 +74,51 @@ namespace JuvoReactNative
                 if (e.InnerException != null)
                     e = e.InnerException;
 
-                Log.Error(Tag, e.Message);
-                Log.Error(Tag, e.StackTrace);
+                LogRn.Error(e.Message);
+                LogRn.Error(e.StackTrace);
             }
             else
             {
-                Log.Error(Tag, "Got unhandled exception event: " + evt);
+                LogRn.Error("Got unhandled exception event: " + evt);
             }
         }
         protected override void OnCreate()
         {
 
-            Log.Debug(Tag, "OnCreate()");
+            LogRn.Debug("OnCreate()");
 
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             ServicePointManager.DefaultConnectionLimit = 100;
             base.OnCreate();
             RootView.BackgroundColor = ElmSharp.Color.Transparent;
 
-            Log.Debug(Tag, "OnCreate() done");
+            LogRn.Debug("OnCreate() done");
         }
 
         protected override void OnAppControlReceived(AppControlReceivedEventArgs e)
         {
-            Log.Debug(Tag, $"OnAppControlReceived()");
+            LogRn.Debug("OnAppControlReceived()");
 
             var payloadParser = new PayloadParser(e.ReceivedAppControl);
             if (!payloadParser.TryGetUrl(out var url))
-                url=string.Empty;
+                url = string.Empty;
 
             deepLinkReceivedSubject.OnNext(url);
-            
+
             base.OnAppControlReceived(e);
 
-            Log.Debug(Tag, "OnAppControlReceived() done");
+            LogRn.Debug("OnAppControlReceived() done");
         }
 
         protected override void OnTerminate()
         {
-            Log.Debug(Tag, "OnTerminate()");
+            LogRn.Debug("OnTerminate()");
 
             deepLinkReceivedSubject.OnCompleted();
             deepLinkReceivedSubject.Dispose();
             base.OnTerminate();
 
-            Log.Debug(Tag, "OnTerminate() done");
+            LogRn.Debug("OnTerminate() done");
         }
 
 
@@ -140,7 +141,7 @@ namespace JuvoReactNative
             }
             catch (Exception e)
             {
-                Log.Error(Tag, e.ToString());
+                LogRn.Error(e.ToString());
             }
         }
     }

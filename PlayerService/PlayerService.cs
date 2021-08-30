@@ -28,7 +28,7 @@ using System.Threading;
 using JuvoPlayer;
 using JuvoPlayer.Common;
 using JuvoPlayer.Drms;
-using static PlayerService.PlayerServiceToolBox;
+
 using Window = ElmSharp.Window;
 
 namespace PlayerService
@@ -110,7 +110,7 @@ namespace PlayerService
                 _bufferingSubject = null;
                 _endOfStream = null;
 
-                Logger.Info("Disposed event subjects");
+                LogRn.Info("Disposed event subjects");
                 if (_player != null)
                 {
                     try
@@ -119,12 +119,12 @@ namespace PlayerService
                         _playerEventSubscription = default;
 
                         await _player.DisposeAsync();
-                        Logger.Info("Disposed player");
+                        LogRn.Info("Disposed player");
 
                     }
                     catch (Exception e)
                     {
-                        Logger.Warn($"Ignoring exception: {e}");
+                        LogRn.Warn($"Ignoring exception: {e}");
                     }
                 }
             }
@@ -135,7 +135,7 @@ namespace PlayerService
 
         private void OnEvent(IEvent ev)
         {
-            Logger.Info(ev.ToString());
+            LogRn.Info(ev.ToString());
 
             switch (ev)
             {
@@ -166,7 +166,7 @@ namespace PlayerService
             async Task PauseJob()
             {
                 await _player.Pause();
-                Logger.Info(_player.State.ToString());
+                LogRn.Info(_player.State.ToString());
             }
 
             var job = await _playerThread
@@ -181,7 +181,7 @@ namespace PlayerService
             async Task SeekJob(TimeSpan seekTo)
             {
                 await _player.Seek(seekTo);
-                Logger.Info($"Seeked to: {seekTo}");
+                LogRn.Info($"Seeked to: {seekTo}");
             }
 
             var job = await _playerThread
@@ -200,12 +200,12 @@ namespace PlayerService
                 if (formatId == PlayerServiceToolBox.ThroughputSelection)
                 {
                     selectors[groupId] = new ThroughputHistoryStreamSelector(new ThroughputHistory());
-                    Logger.Info($"Selecting {groups[groupId].ContentType} 'ThroughputHistoryStreamSelector'");
+                    LogRn.Info($"Selecting {groups[groupId].ContentType} 'ThroughputHistoryStreamSelector'");
                 }
                 else
                 {
                     selectors[groupId] = new FixedStreamSelector(formatId);
-                    Logger.Info($"Selecting {groups[groupId].ContentType} FormatId '{formatId}' {groups[groupId].Streams[formatId].Format.FormatDescription()}");
+                    LogRn.Info($"Selecting {groups[groupId].ContentType} FormatId '{formatId}' {groups[groupId].Streams[formatId].Format.FormatDescription()}");
                 }
 
                 await _player.SetStreamGroups(groups, selectors);
@@ -227,7 +227,7 @@ namespace PlayerService
         {
             Task<List<StreamDescription>> GetStreamsJob(ContentType contentType)
             {
-                Logger.Info(contentType.ToString());
+                LogRn.Info(contentType.ToString());
 
                 // Do Note. Odering of streams in StreamGroups differs between GetStreamGroups() and GetSelectedStresmsGroups().
                 return Task.FromResult(_player
@@ -246,7 +246,7 @@ namespace PlayerService
         {
             async Task SetSourceJob(ClipDefinition source)
             {
-                Logger.Info(source.Url);
+                LogRn.Info(source.Url);
                 _currentClip = source;
 
                 try
@@ -254,11 +254,12 @@ namespace PlayerService
                     _player = BuildDashPlayer(source);
                     _playerEventSubscription = SubscribePlayerEvents(_player, OnEvent);
                     await _player.Prepare();
-                    Logger.Info(_player.State.ToString());
+                    LogRn.Info(_player.State.ToString());
+
                 }
                 catch (Exception e)
                 {
-                    Logger.Error($"Prepare failed {e.Message}");
+                    LogRn.Error($"Prepare failed: {e}");
 
                     if (_player != default)
                         await _player.DisposeAsync();
@@ -286,7 +287,7 @@ namespace PlayerService
             Task StartJob()
             {
                 _player.Play();
-                Logger.Info(_player.State.ToString());
+                LogRn.Info(_player.State.ToString());
                 return Task.CompletedTask;
             }
 
@@ -310,11 +311,11 @@ namespace PlayerService
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warn($"Ignoring exception: {ex.Message}");
+                    LogRn.Warn($"Ignoring exception: {ex.Message}");
                 }
 
                 _player = null;
-                Logger.Info($"Suspend position: {_suspendTimeIndex}");
+                LogRn.Info($"Suspend position: {_suspendTimeIndex}");
             }
 
             var job = await _playerThread.ThreadJob(SuspendJob).ConfigureAwait(false);
@@ -335,7 +336,7 @@ namespace PlayerService
                 }
                 catch (Exception e)
                 {
-                    Logger.Error($"Prepare failed {e.Message}");
+                    LogRn.Error($"Prepare failed {e.Message}");
 
                     if (_player != default)
                     {
@@ -345,7 +346,7 @@ namespace PlayerService
                     throw;
                 }
 
-                Logger.Info($"Resumed position/state: {_suspendTimeIndex.Value}/{_player.State}");
+                LogRn.Info($"Resumed position/state: {_suspendTimeIndex.Value}/{_player.State}");
                 return State;
             }
 
