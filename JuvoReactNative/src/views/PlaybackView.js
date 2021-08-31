@@ -67,8 +67,8 @@ export default class PlaybackView extends Component
     DeviceEventEmitter.addListener('PlaybackView/onTVKeyDown', this.onTVKeyDown);
 
     // Start playback outside of component lifecycle.
-    setImmediate( async ()=> await this.startPlayback() );
-
+    setImmediate( async ()=> await this.startPlayback());
+    
     console.debug('PlaybackView.componentDidMount(): done');
   }
 
@@ -83,6 +83,7 @@ export default class PlaybackView extends Component
     this.JuvoEventEmitter.removeAllListeners('onEndOfStream');
     delete this.JuvoEventEmitter;
 
+    console.debug('PlaybackView.componentWillUnmount(): Stopping playback');
     await this.JuvoPlayer.StopPlayback();
     
     console.debug('PlaybackView.componentWillUnmount(): done');
@@ -96,6 +97,7 @@ export default class PlaybackView extends Component
 
       const video = ResourceLoader.clipsData[this.props.selectedIndex];
       const DRM = video.drmDatas ? JSON.stringify(video.drmDatas) : null;
+      
       await this.JuvoPlayer.StartPlayback(video.url, DRM, video.type);
 
       this.displayPlaybackInfo(true);
@@ -205,19 +207,16 @@ export default class PlaybackView extends Component
   {
     console.error(`PlaybackView.onPlaybackError(): '${error.Message}'`);
     
-    const currentScene = RenderScene.getScene();
+    if(this.state.playbackInfo)
+      this.removePlaybackInfo();
 
-    // show first error message only.
-    if(currentScene.modalView.name != RenderView.viewPopup.name)
-    {
-      const catalogView = RenderView.viewContentCatalog;
-      catalogView.args = {selectedIndex: this.props.selectedIndex};
+    const catalogView = RenderView.viewContentCatalog;
+    catalogView.args = {selectedIndex: this.props.selectedIndex};
 
-      const errorView = RenderView.viewPopup;
-      errorView.args = { messageText: error.Message }
-      RenderScene.setScene(catalogView, errorView);
-    }
-
+    const errorView = RenderView.viewPopup;
+    errorView.args = { messageText: error.Message }
+    RenderScene.setScene(catalogView, errorView);
+    
     console.error('PlaybackView.onPlaybackError(): done');
   }
 

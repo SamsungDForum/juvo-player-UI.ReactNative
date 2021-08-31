@@ -40,7 +40,19 @@ export default class ContentCatalog extends Component
   componentDidMount() 
   {
     DeviceEventEmitter.addListener('ContentCatalog/onTVKeyDown', this.onTVKeyDown);
-    setImmediate(()=>RenderScene.setScene(RenderView.viewCurrent,RenderView.viewNone));
+    setImmediate(()=>
+    {
+      const scene = RenderScene.getScene();
+      if(scene.modalView.name == RenderView.viewPopup.name)
+      {
+        // Don't hide popups (errors) on moount
+        RenderScene.setScene(RenderView.viewCurrent,RenderView.viewCurrent);
+      }
+      else
+      {
+        RenderScene.setScene(RenderView.viewCurrent,RenderView.viewNone);
+      }
+    });
     console.debug('ContentCatalog.componentDidMount(): done');
   }
 
