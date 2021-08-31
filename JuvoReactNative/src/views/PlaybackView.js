@@ -60,7 +60,7 @@ export default class PlaybackView extends Component
     // Run handlers via setImmediate() to get them more syncish.
     this.JuvoEventEmitter.addListener('onUpdateBufferingProgress', (p) => setImmediate( this.onUpdateBufferingProgress, p ) );
     this.JuvoEventEmitter.addListener('onSeekCompleted', () => setImmediate( this.onSeekCompleted ) );
-    this.JuvoEventEmitter.addListener('onPlaybackError', (e) => setImmediate( this.onPlaybackError, e ) );
+    this.JuvoEventEmitter.addListener('onPlaybackError', (e) => setImmediate( this.onPlaybackError, e.Message ) );
     this.JuvoEventEmitter.addListener('onEndOfStream', (eos) => setImmediate( this.onEndOfStream, eos ) );
 
     // Unchecked if DeviceEventEmitter events follow NativeEventEmitter behaviour model.
@@ -91,24 +91,25 @@ export default class PlaybackView extends Component
 
   async startPlayback()
   {
+    console.log('PlaybackView.startPlayback():');
+
     try
     {
-      console.log('PlaybackView.startPlayback():');
-
       const video = ResourceLoader.clipsData[this.props.selectedIndex];
       const DRM = video.drmDatas ? JSON.stringify(video.drmDatas) : null;
       
       await this.JuvoPlayer.StartPlayback(video.url, DRM, video.type);
 
       this.displayPlaybackInfo(true);
-      RenderScene.setScene(RenderView.viewCurrent, RenderView.viewNone);
-
-      console.log('PlaybackView.startPlayback(): done');
+      RenderScene.setScene(RenderView.viewCurrent, RenderView.viewNone);      
     }
     catch(error)
     {
-      console.error(`PlaybackView.startPlayback(): ERROR '${error}'`);
+      console.error(`PlaybackView.startPlayback(): '${error}'`);
+      this.onPlaybackError(error.message);
     }
+
+    console.log('PlaybackView.startPlayback(): done');
   }
 
   handleSeek() 
@@ -205,7 +206,7 @@ export default class PlaybackView extends Component
 
   onPlaybackError(error) 
   {
-    console.error(`PlaybackView.onPlaybackError(): '${error.Message}'`);
+    console.error(`PlaybackView.onPlaybackError(): '${error}'`);
     
     if(this.state.playbackInfo)
       this.removePlaybackInfo();
@@ -214,7 +215,7 @@ export default class PlaybackView extends Component
     catalogView.args = {selectedIndex: this.props.selectedIndex};
 
     const errorView = RenderView.viewPopup;
-    errorView.args = { messageText: error.Message }
+    errorView.args = { messageText: error }
     RenderScene.setScene(catalogView, errorView);
     
     console.error('PlaybackView.onPlaybackError(): done');

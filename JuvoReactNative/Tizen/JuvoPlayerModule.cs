@@ -258,11 +258,15 @@ namespace JuvoReactNative
             {
                 if (string.IsNullOrWhiteSpace(videoURI))
                 {
-                    promise.Reject("error", "not specified");
+                    promise.Reject("error", "uri not specified");
                 }
                 else if (string.IsNullOrWhiteSpace(streamingProtocol))
                 {
                     promise.Reject("error", "protocol not specified");
+                }
+                else if (!streamingProtocol.Equals("dash", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    promise.Reject("error", $"Unsupported protocol: {streamingProtocol}");
                 }
                 else
                 {

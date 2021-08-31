@@ -103,12 +103,13 @@ namespace PlayerService
                 _playerEventSubscription?.Dispose();
                 _playerEventSubscription = default;
 
-                if (_player != null)
+                if (_player != default)
                 {
                     try
                     {
                         LogRn.Info("Dispoing player");
                         await _player.DisposeAsync();
+                        _player = default;
                     }
                     catch (Exception e)
                     {
@@ -181,9 +182,12 @@ namespace PlayerService
                     var firstCompleted = await Task.WhenAny(errorTask, prepareTask);
                     if (firstCompleted == errorTask)
                     {
+                        LogRn.Error("Prepare completed with error: " + errorTask.Result);
                         cts.Cancel();
                         throw errorTask.Result;
                     }
+
+                    LogRn.Info("Prepare completed without errors");
                 }
             }
         }
@@ -193,7 +197,7 @@ namespace PlayerService
             using (LogScope.Create())
             {
                 new Task(async () => await TerminatePlayer().ConfigureAwait(false), CancellationToken.None, TaskCreationOptions.DenyChildAttach).RunSynchronously();
-                
+
                 //WaitHandle.WaitAll(new[] { ((IAsyncResult)TerminatePlayer()).AsyncWaitHandle });
                 LogRn.Info("Waiting player thread join");
                 _playerThread.Join();
@@ -307,33 +311,21 @@ namespace PlayerService
                     _playerEventSubscription = SubscribePlayerEvents(_player, OnEvent);
                     await PrepareWithCancellation(_player);
                     LogRn.Info(_player.State.ToString());
-
                 }
                 catch (Exception e)
                 {
                     LogRn.Error($"Prepare failed: {e}");
-
-                    if (_player != default)
-                        await _player.DisposeAsync();
-
-                    throw;
+                    throw new Exception(_setSourceFailMessage, e);
                 }
             }
 
             using (LogScope.Create())
             {
-                if (!clip.Type.Equals("dash", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    _errorSubject.OnNext($"Unsupported protocol: {clip.Type}");
-                }
-                else
-                {
-                    var job = await _playerThread
-                        .ThreadJob(() => SetSourceJob(clip).ReportException(_errorSubject, _setSourceFailMessage))
-                        .ConfigureAwait(false);
+                var job = await _playerThread
+                    .ThreadJob(() => SetSourceJob(clip))
+                    .ConfigureAwait(false);
 
-                    await job.ConfigureAwait(false);
-                }
+                await job.ConfigureAwait(false);
             }
         }
 
