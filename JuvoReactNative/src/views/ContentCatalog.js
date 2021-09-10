@@ -45,7 +45,7 @@ export default class ContentCatalog extends Component
       const scene = RenderScene.getScene();
       if(scene.modalView.name == RenderView.viewPopup.name)
       {
-        // Don't hide popups (errors) on moount
+        // Don't hide popups (errors) on mount
         RenderScene.setScene(RenderView.viewCurrent,RenderView.viewCurrent);
       }
       else

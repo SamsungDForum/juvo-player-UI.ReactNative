@@ -107,7 +107,7 @@ namespace PlayerService
                 {
                     try
                     {
-                        LogRn.Info("Dispoing player");
+                        LogRn.Info("Disposing player");
                         await _player.DisposeAsync();
                         _player = default;
                     }
@@ -198,7 +198,6 @@ namespace PlayerService
             {
                 new Task(async () => await TerminatePlayer().ConfigureAwait(false), CancellationToken.None, TaskCreationOptions.DenyChildAttach).RunSynchronously();
 
-                //WaitHandle.WaitAll(new[] { ((IAsyncResult)TerminatePlayer()).AsyncWaitHandle });
                 LogRn.Info("Waiting player thread join");
                 _playerThread.Join();
             }
