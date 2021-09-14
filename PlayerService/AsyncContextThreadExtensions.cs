@@ -19,7 +19,7 @@ using System;
 using System.Reactive.Subjects;
 using System.Threading.Tasks;
 using Nito.AsyncEx;
-using static PlayerService.PlayerServiceToolBox;
+
 
 namespace PlayerService
 {
@@ -39,7 +39,7 @@ namespace PlayerService
             }
             catch (Exception e)
             {
-                Logger.Error($"{e.GetType()} {e.Message}");
+                LogRn.Error($"{e.GetType()} {e.Message}");
                 reportTo?.OnNext(messsage ?? e.Message);
                 throw;
             }
@@ -53,7 +53,7 @@ namespace PlayerService
             }
             catch (Exception e)
             {
-                Logger.Error($"{e.GetType()} {e.Message}");
+                LogRn.Error($"{e.GetType()} {e.Message}");
                 reportTo?.OnNext(messsage ?? e.Message);
                 throw;
             }

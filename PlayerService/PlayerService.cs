@@ -24,11 +24,12 @@ using System.Threading.Tasks;
 using Nito.AsyncEx;
 using UI.Common;
 using System.Reactive.Subjects;
+using System.Reactive.Threading.Tasks;
 using System.Threading;
 using JuvoPlayer;
 using JuvoPlayer.Common;
 using JuvoPlayer.Drms;
-using static PlayerService.PlayerServiceToolBox;
+
 using Window = ElmSharp.Window;
 
 namespace PlayerService
@@ -98,10 +99,30 @@ namespace PlayerService
             {
                 // Terminate subjects on player thread. Any pending thread jobs will handle terminated subjects,
                 // _playerStateSubject in particular, gracefully.
+                LogRn.Info("Disposing event subscription");
+                _playerEventSubscription?.Dispose();
+                _playerEventSubscription = default;
+
+                if (_player != default)
+                {
+                    try
+                    {
+                        LogRn.Info("Disposing player");
+                        await _player.DisposeAsync();
+                        _player = default;
+                    }
+                    catch (Exception e)
+                    {
+                        LogRn.Warn($"Ignoring exception: {e}");
+                    }
+                }
+
+                LogRn.Info("Completing event subjects");
                 _errorSubject.OnCompleted();
                 _bufferingSubject.OnCompleted();
                 _endOfStream.OnCompleted();
 
+                LogRn.Info("Disposing event subjects");
                 _errorSubject.Dispose();
                 _bufferingSubject.Dispose();
                 _endOfStream.Dispose();
@@ -109,54 +130,75 @@ namespace PlayerService
                 _errorSubject = null;
                 _bufferingSubject = null;
                 _endOfStream = null;
-
-                Logger.Info("Disposed event subjects");
-                if (_player != null)
-                {
-                    try
-                    {
-                        _playerEventSubscription.Dispose();
-                        _playerEventSubscription = default;
-
-                        await _player.DisposeAsync();
-                        Logger.Info("Disposed player");
-
-                    }
-                    catch (Exception e)
-                    {
-                        Logger.Warn($"Ignoring exception: {e}");
-                    }
-                }
             }
 
-            var job = await _playerThread.ThreadJob(TerminateJob).ConfigureAwait(false);
-            await job.ConfigureAwait(false);
+            using (LogScope.Create())
+            {
+                var job = await _playerThread.ThreadJob(TerminateJob).ConfigureAwait(false);
+                await job.ConfigureAwait(false);
+            }
         }
+
 
         private void OnEvent(IEvent ev)
         {
-            Logger.Info(ev.ToString());
-
-            switch (ev)
+            using (LogScope.Create())
             {
-                case EosEvent _:
-                    _endOfStream?.OnNext(Unit.Default);
-                    break;
+                LogRn.Info(ev.ToString());
 
-                case BufferingEvent buf:
-                    _bufferingSubject?.OnNext(buf.IsBuffering ? 0 : 100);
-                    break;
+                switch (ev)
+                {
+                    case EosEvent _:
+                        _endOfStream?.OnNext(Unit.Default);
+                        break;
+
+                    case BufferingEvent buf:
+                        _bufferingSubject?.OnNext(buf.IsBuffering ? 0 : 100);
+                        break;
+
+                    case ExceptionEvent ex:
+                        var errMsg = $"{ex.Exception.Message} {ex.Exception.InnerException?.Message}";
+                        LogRn.Error(errMsg);
+                        break;
+                }
             }
         }
 
         private static IDisposable SubscribePlayerEvents(IPlayer player, Action<IEvent> handler) =>
             player.OnEvent().Subscribe(handler);
 
+        private static async Task PrepareWithCancellation(IPlayer player)
+        {
+            using (LogScope.Create())
+            {
+                using (var cts = new CancellationTokenSource())
+                {
+                    var errorTask = player
+                        .OnEvent()
+                        .FirstAsync(ev => ev is ExceptionEvent)
+                        .Select(ev => (ev as ExceptionEvent).Exception)
+                        .ToTask(cts.Token);
+                    var prepareTask = player.Prepare();
+                    var firstCompleted = await Task.WhenAny(errorTask, prepareTask);
+                    if (firstCompleted == errorTask)
+                    {
+                        LogRn.Error("Prepare completed with error: " + errorTask.Result);
+                        cts.Cancel();
+                        throw errorTask.Result;
+                    }
+
+                    LogRn.Info("Prepare completed without errors");
+                }
+            }
+        }
+
         public void Dispose()
         {
             using (LogScope.Create())
             {
-                WaitHandle.WaitAll(new[] { ((IAsyncResult)TerminatePlayer()).AsyncWaitHandle });
+                new Task(async () => await TerminatePlayer().ConfigureAwait(false), CancellationToken.None, TaskCreationOptions.DenyChildAttach).RunSynchronously();
+
+                LogRn.Info("Waiting player thread join");
                 _playerThread.Join();
             }
         }
@@ -166,14 +208,17 @@ namespace PlayerService
             async Task PauseJob()
             {
                 await _player.Pause();
-                Logger.Info(_player.State.ToString());
+                LogRn.Info(_player.State.ToString());
             }
 
-            var job = await _playerThread
-                .ThreadJob(() => PauseJob().ReportException(_errorSubject, _pauseFailMessage))
-                .ConfigureAwait(false);
+            using (LogScope.Create())
+            {
+                var job = await _playerThread
+                    .ThreadJob(() => PauseJob().ReportException(_errorSubject, _pauseFailMessage))
+                    .ConfigureAwait(false);
 
-            await job.ConfigureAwait(false);
+                await job.ConfigureAwait(false);
+            }
         }
 
         public async Task SeekTo(TimeSpan to)
@@ -181,14 +226,17 @@ namespace PlayerService
             async Task SeekJob(TimeSpan seekTo)
             {
                 await _player.Seek(seekTo);
-                Logger.Info($"Seeked to: {seekTo}");
+                LogRn.Info($"Seeked to: {seekTo}");
             }
 
-            var job = await _playerThread
-                .ThreadJob(() => SeekJob(to).ReportException(_errorSubject, _seekFailMessage))
-                .ConfigureAwait(false);
+            using (LogScope.Create())
+            {
+                var job = await _playerThread
+                    .ThreadJob(() => SeekJob(to).ReportException(_errorSubject, _seekFailMessage))
+                    .ConfigureAwait(false);
 
-            await job.ConfigureAwait(false);
+                await job.ConfigureAwait(false);
+            }
         }
 
         public async Task ChangeActiveStream(int groupIdx, int formatIdx)
@@ -200,22 +248,26 @@ namespace PlayerService
                 if (formatId == PlayerServiceToolBox.ThroughputSelection)
                 {
                     selectors[groupId] = new ThroughputHistoryStreamSelector(new ThroughputHistory());
-                    Logger.Info($"Selecting {groups[groupId].ContentType} 'ThroughputHistoryStreamSelector'");
+                    LogRn.Info($"Selecting {groups[groupId].ContentType} 'ThroughputHistoryStreamSelector'");
                 }
                 else
                 {
                     selectors[groupId] = new FixedStreamSelector(formatId);
-                    Logger.Info($"Selecting {groups[groupId].ContentType} FormatId '{formatId}' {groups[groupId].Streams[formatId].Format.FormatDescription()}");
+                    LogRn.Info($"Selecting {groups[groupId].ContentType} FormatId '{formatId}' {groups[groupId].Streams[formatId].Format.FormatDescription()}");
                 }
 
                 await _player.SetStreamGroups(groups, selectors);
             }
 
-            var job = await _playerThread
-                .ThreadJob(() => ChangeStreamJob(groupIdx, formatIdx).ReportException(_errorSubject, _changeStreamFailMessage))
-                .ConfigureAwait(false);
+            using (LogScope.Create())
+            {
+                var job = await _playerThread
+                    .ThreadJob(() =>
+                        ChangeStreamJob(groupIdx, formatIdx).ReportException(_errorSubject, _changeStreamFailMessage))
+                    .ConfigureAwait(false);
 
-            await job.ConfigureAwait(false);
+                await job.ConfigureAwait(false);
+            }
         }
 
         public void DeactivateStream(StreamType streamType)
@@ -227,7 +279,7 @@ namespace PlayerService
         {
             Task<List<StreamDescription>> GetStreamsJob(ContentType contentType)
             {
-                Logger.Info(contentType.ToString());
+                LogRn.Info(contentType.ToString());
 
                 // Do Note. Odering of streams in StreamGroups differs between GetStreamGroups() and GetSelectedStresmsGroups().
                 return Task.FromResult(_player
@@ -235,46 +287,41 @@ namespace PlayerService
                     .ToStreamDescription(contentType));
             }
 
-            var job = await _playerThread
-                .ThreadJob(() => GetStreamsJob(streamType.AsContentType()).ReportException(_errorSubject))
-                .ConfigureAwait(false);
+            using (LogScope.Create())
+            {
+                var job = await _playerThread
+                    .ThreadJob(() => GetStreamsJob(streamType.AsContentType()).ReportException(_errorSubject))
+                    .ConfigureAwait(false);
 
-            return await job.ConfigureAwait(false);
+                return await job.ConfigureAwait(false);
+            }
         }
 
         public async Task SetSource(ClipDefinition clip)
         {
             async Task SetSourceJob(ClipDefinition source)
             {
-                Logger.Info(source.Url);
+                LogRn.Info(source.Url);
                 _currentClip = source;
 
                 try
                 {
                     _player = BuildDashPlayer(source);
                     _playerEventSubscription = SubscribePlayerEvents(_player, OnEvent);
-                    await _player.Prepare();
-                    Logger.Info(_player.State.ToString());
+                    await PrepareWithCancellation(_player);
+                    LogRn.Info(_player.State.ToString());
                 }
                 catch (Exception e)
                 {
-                    Logger.Error($"Prepare failed {e.Message}");
-
-                    if (_player != default)
-                        await _player.DisposeAsync();
-
-                    throw;
+                    LogRn.Error($"Prepare failed: {e}");
+                    throw new Exception(_setSourceFailMessage, e);
                 }
             }
 
-            if (!clip.Type.Equals("dash", StringComparison.InvariantCultureIgnoreCase))
-            {
-                _errorSubject.OnNext($"Unsupported protocol: {clip.Type}");
-            }
-            else
+            using (LogScope.Create())
             {
                 var job = await _playerThread
-                    .ThreadJob(() => SetSourceJob(clip).ReportException(_errorSubject, _setSourceFailMessage))
+                    .ThreadJob(() => SetSourceJob(clip))
                     .ConfigureAwait(false);
 
                 await job.ConfigureAwait(false);
@@ -286,15 +333,18 @@ namespace PlayerService
             Task StartJob()
             {
                 _player.Play();
-                Logger.Info(_player.State.ToString());
+                LogRn.Info(_player.State.ToString());
                 return Task.CompletedTask;
             }
 
-            var job = await _playerThread
-                .ThreadJob(() => StartJob().ReportException(_errorSubject, _startFailMessage))
-                .ConfigureAwait(false);
+            using (LogScope.Create())
+            {
+                var job = await _playerThread
+                    .ThreadJob(() => StartJob().ReportException(_errorSubject, _startFailMessage))
+                    .ConfigureAwait(false);
 
-            await job.ConfigureAwait(false);
+                await job.ConfigureAwait(false);
+            }
         }
 
         public async Task Suspend()
@@ -310,15 +360,18 @@ namespace PlayerService
                 }
                 catch (Exception ex)
                 {
-                    Logger.Warn($"Ignoring exception: {ex.Message}");
+                    LogRn.Warn($"Ignoring exception: {ex.Message}");
                 }
 
                 _player = null;
-                Logger.Info($"Suspend position: {_suspendTimeIndex}");
+                LogRn.Info($"Suspend position: {_suspendTimeIndex}");
             }
 
-            var job = await _playerThread.ThreadJob(SuspendJob).ConfigureAwait(false);
-            await job.ConfigureAwait(false);
+            using (LogScope.Create())
+            {
+                var job = await _playerThread.ThreadJob(SuspendJob).ConfigureAwait(false);
+                await job.ConfigureAwait(false);
+            }
         }
 
         public async Task Resume()
@@ -335,7 +388,7 @@ namespace PlayerService
                 }
                 catch (Exception e)
                 {
-                    Logger.Error($"Prepare failed {e.Message}");
+                    LogRn.Error($"Prepare failed {e.Message}");
 
                     if (_player != default)
                     {
@@ -345,21 +398,24 @@ namespace PlayerService
                     throw;
                 }
 
-                Logger.Info($"Resumed position/state: {_suspendTimeIndex.Value}/{_player.State}");
+                LogRn.Info($"Resumed position/state: {_suspendTimeIndex.Value}/{_player.State}");
                 return State;
             }
 
-            if (!_suspendTimeIndex.HasValue)
-                return;
+            using (LogScope.Create())
+            {
+                if (!_suspendTimeIndex.HasValue)
+                    return;
 
-            var job = await _playerThread
-                .ThreadJob(() => ResumeJob().ReportException(_errorSubject, _resumeFailMessage))
-                .ConfigureAwait(false);
-            var resumeState = await job.ConfigureAwait(false);
+                var job = await _playerThread
+                    .ThreadJob(() => ResumeJob().ReportException(_errorSubject, _resumeFailMessage))
+                    .ConfigureAwait(false);
+                var resumeState = await job.ConfigureAwait(false);
 
-            // Suspend/Resume calls are not routed through JS. If playing state is not reached, report an error.
-            if (resumeState != PlayerState.Playing)
-                _errorSubject.OnNext($"Resume failed. State {resumeState}");
+                // Suspend/Resume calls are not routed through JS. If playing state is not reached, report an error.
+                if (resumeState != PlayerState.Playing)
+                    _errorSubject.OnNext($"Resume failed. State {resumeState}");
+            }
         }
 
         public IObservable<string> PlaybackError() => _errorSubject.Publish().RefCount();

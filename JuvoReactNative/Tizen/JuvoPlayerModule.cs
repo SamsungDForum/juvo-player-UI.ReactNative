@@ -24,8 +24,6 @@ using System.Threading.Tasks;
 using ReactNative;
 using ReactNative.Bridge;
 using JuvoPlayer.Common;
-using JuvoLogger;
-using ILogger = JuvoLogger.ILogger;
 using ElmSharp;
 using ReactNative.Modules.Core;
 using Newtonsoft.Json.Linq;
@@ -33,12 +31,11 @@ using PlayerService;
 using Tizen.Applications;
 using UI.Common;
 
+
 namespace JuvoReactNative
 {
     public class JuvoPlayerModule : ReactContextNativeModuleBase, ILifecycleEventListener, ISeekLogicClient
     {
-        private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
-
         private readonly SeekLogic _seekLogic;
         private EcoreEvent<EcoreKeyEventArgs> _keyDown;
 
@@ -114,7 +111,7 @@ namespace JuvoReactNative
         private void TerminatePlayerService()
         {
             bool havePlayer = Player != null;
-            Logger.Info($"Have player: {havePlayer}");
+            LogRn.Info($"Have player: {havePlayer}");
 
             if (havePlayer)
             {
@@ -122,13 +119,13 @@ namespace JuvoReactNative
                 _seekCompletedSub.Dispose();
                 Player.Dispose();
                 Player = null;
-                Logger.Info("PlayerService kicked the bucket");
+                LogRn.Info("PlayerService kicked the bucket");
             }
         }
 
         void ILifecycleEventListener.OnDestroy()
         {
-            Logger.Info("Unicorn event!");
+            LogRn.Info("Unicorn event!");
         }
 
         void ILifecycleEventListener.OnResume()
@@ -139,7 +136,7 @@ namespace JuvoReactNative
                 {
                     bool havePlayer = Player != null;
 
-                    Logger.Info($"Have player: {havePlayer}");
+                    LogRn.Info($"Have player: {havePlayer}");
                     if (!havePlayer)
                         return;
 
@@ -163,7 +160,7 @@ namespace JuvoReactNative
                 {
                     bool havePlayer = Player != null;
 
-                    Logger.Info($"Have player: {havePlayer}");
+                    LogRn.Info($"Have player: {havePlayer}");
                     if (!havePlayer)
                         return;
 
@@ -213,7 +210,7 @@ namespace JuvoReactNative
                 try
                 {
                     var streamType = (StreamType)streamTypeIndex;
-                    var streams = await Player.GetStreamsDescription(streamType);
+                    var streams = await Player.GetStreamsDescription(streamType).ConfigureAwait(false);
 
                     var streamLabel = streamType.ToString();
                     var res = new JObject();
@@ -224,8 +221,8 @@ namespace JuvoReactNative
                 }
                 catch (Exception e)
                 {
-                    promise.Reject(e.GetType().ToString(), e.Message);
-                    Logger.Error(e);
+                    promise.Reject("error", e.Message);
+                    LogRn.Error(e.ToString());
                 }
             }
         }
@@ -242,8 +239,8 @@ namespace JuvoReactNative
                 }
                 catch (Exception e)
                 {
-                    promise.Reject(e.GetType().ToString(), e.Message);
-                    Logger.Error(e);
+                    promise.Reject("error", e.Message);
+                    LogRn.Error(e.ToString());
                 }
             }
         }
@@ -251,49 +248,53 @@ namespace JuvoReactNative
         [ReactMethod]
         public void Log(string message)
         {
-            Logger?.Info(message);
+            LogRn.Info(message);
         }
 
         [ReactMethod]
         public async void StartPlayback(string videoURI, string drmDatasJSON, string streamingProtocol, IPromise promise)
         {
-            async Task StartPlaybackInternal(string uri, List<DrmDescription> drm, string protocol)
+            using (LogScope.Create())
             {
-                InitialisePlayback();
-
-                await Player.SetSource(new ClipDefinition
+                if (string.IsNullOrWhiteSpace(videoURI))
                 {
-                    Type = protocol,
-                    Url = uri,
-                    Subtitles = new List<SubtitleInfo>(),
-                    DRMDatas = drm
-                });
-
-                await Player.Start();
-            }
-
-            if (string.IsNullOrWhiteSpace(videoURI))
-            {
-                promise.Reject("uri", "not specified");
-            }
-            else if (string.IsNullOrWhiteSpace(streamingProtocol))
-            {
-                promise.Reject("uri", "protocol not specified");
-            }
-            else
-            {
-                try
-                {
-                    var drmList = string.IsNullOrWhiteSpace(drmDatasJSON)
-                        ? Enumerable.Empty<DrmDescription>().ToList()
-                        : JSONFileReader.DeserializeJsonText<List<DrmDescription>>(drmDatasJSON);
-
-                    await StartPlaybackInternal(videoURI, drmList, streamingProtocol).ConfigureAwait(false);
-                    promise.Resolve(Player.State.ToString());
+                    promise.Reject("error", "uri not specified");
                 }
-                catch (Exception e)
+                else if (string.IsNullOrWhiteSpace(streamingProtocol))
                 {
-                    promise.Reject(e.GetType().ToString(), e.Message);
+                    promise.Reject("error", "protocol not specified");
+                }
+                else if (!streamingProtocol.Equals("dash", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    promise.Reject("error", $"Unsupported protocol: {streamingProtocol}");
+                }
+                else
+                {
+                    try
+                    {
+                        var drmList = string.IsNullOrWhiteSpace(drmDatasJSON)
+                            ? Enumerable.Empty<DrmDescription>().ToList()
+                            : JSONFileReader.DeserializeJsonText<List<DrmDescription>>(drmDatasJSON);
+
+                        InitialisePlayback();
+
+                        await Player.SetSource(new ClipDefinition
+                        {
+                            Type = streamingProtocol,
+                            Url = videoURI,
+                            Subtitles = new List<SubtitleInfo>(),
+                            DRMDatas = drmList
+                        }).ConfigureAwait(false);
+
+                        await Player.Start().ConfigureAwait(false);
+
+                        promise.Resolve(Player.State.ToString());
+                    }
+                    catch (Exception e)
+                    {
+                        LogRn.Error("Error: " + e.Message);
+                        promise.Reject("error", e.Message);
+                    }
                 }
             }
         }
@@ -310,7 +311,7 @@ namespace JuvoReactNative
                 catch (Exception e)
                 {
                     // Inform but don't fail. Decouples player state from UI.
-                    Logger.Warn(e.Message);
+                    LogRn.Warn(e.Message);
                 }
 
                 // Don't pass "failed/sucess" to JS. Promise is used purely as operation completion.
@@ -321,11 +322,11 @@ namespace JuvoReactNative
         [ReactMethod]
         public async void PauseResumePlayback(IPromise promise)
         {
-            async Task<PlayerState> PauseResumePlaybackInternal()
+            using (LogScope.Create())
             {
                 Task pauseResumeTask;
-
-                switch (Player.State)
+                var state = Player.State;
+                switch (state)
                 {
                     case PlayerState.Playing:
                         pauseResumeTask = Player.Pause();
@@ -336,22 +337,19 @@ namespace JuvoReactNative
                         break;
 
                     default:
-                        pauseResumeTask = Task.CompletedTask;
-                        break;
+                        promise.Resolve(state.ToString());
+                        return;
                 }
 
-                await pauseResumeTask;
-                return Player.State;
-            }
-
-            try
-            {
-                var playerState = await PauseResumePlaybackInternal().ConfigureAwait(false);
-                promise.Resolve(playerState.ToString());
-            }
-            catch (Exception e)
-            {
-                promise.Reject(e.GetType().ToString(), e.Message);
+                try
+                {
+                    await pauseResumeTask.ConfigureAwait(false);
+                    promise.Resolve(Player.State.ToString());
+                }
+                catch (Exception e)
+                {
+                    promise.Reject(e.GetType().ToString(), e.Message);
+                }
             }
         }
 
@@ -405,7 +403,7 @@ namespace JuvoReactNative
             {
                 // Will be raised if called prior to playback setup & start.
                 // Don't penalise such use case, just inform. Decouples "current state" dependency from UI.
-                Logger.Warn(e.Message);
+                LogRn.Warn(e.Message);
 
                 promise.Resolve(new JObject
                 {
@@ -419,8 +417,6 @@ namespace JuvoReactNative
 
     internal static class ContextDump
     {
-        private static readonly ILogger Logger = LoggerManager.GetInstance().GetLogger("JuvoRN");
-
         private static void Dump(this ReactContext context)
         {
             string runningOn = string.Empty;
@@ -437,7 +433,7 @@ namespace JuvoReactNative
             if (string.IsNullOrEmpty(runningOn))
                 runningOn = "Unknown";
 
-            Logger.Debug($"Thread: {runningOn}");
+            LogRn.Debug($"Thread: {runningOn}");
         }
     }
 }
