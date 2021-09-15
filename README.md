@@ -107,7 +107,10 @@ https://github.com/Samsung/react-native-tizen-dotnet/issues/30#issue-533804121
 *yarn bundle --dev* command 
 
 https://github.com/Samsung/react-native-tizen-dotnet/#usage
-has no effect on bundling. JS code will remain "ugly" as... is. Caused by bundling script bug. "Ugliness" will be reflected in errors reported in JS Debug.
+has no effect on bundling. JS code will remain "ugly" as... is. Caused by bundling script bug. 
+*node_modules\react-native-tizen-dotnet\build\bundle.js*
+
+"Ugliness" will be reflected in errors reported in JS Debug.
 ***
 
 ### JS Debug
@@ -153,11 +156,9 @@ Loading dependency graph, done.
 
 Launch of newly installed application wil present React Native error screen
 
-TODO ADD SCREEN PICTURE HEERE
+![](./docs/zebra.png)
 
 Pressing RED button on RC will bring up remote debug configuration screen
-
-TODO ADD SCREEN PICTURE HERE
 
 Enter ReactNative packaging server ip.
 If all went well, reloading an application will result in JS code being pulled from remote server.
@@ -170,5 +171,5 @@ If all went well, reloading an application will result in JS code being pulled f
   - RNJS - JS side React Native logs. Includes console logs.
   - JuvoRN - C# Native ReactNative UI logs. 
   ***
-  Logging is not available on production devices. May be available in Emulator.
+  Logging is not available on production devices.
   ***
