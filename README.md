@@ -4,7 +4,7 @@
 
 ReactNative UI for JuvoPlayer 2.x
 
-## Prerequesits
+## Prerequisites
 Detailed information on Tizen .NET application development can be found on Samsung Developers website
 https://developer.samsung.com/smarttv/develop/tizen-net-tv.html
 
@@ -33,7 +33,7 @@ In order to build ReactNative UI application, following packages are required:
   1.22.10
   ```
 
-- Dependecies installation
+- Dependencies installation
   Installing dependencies is done by executing *yarn* command. This needs to be called from *JuvoReactNative* subdirectory
   ```
   PS C:\juvo-player-UI.ReactNative\JuvoReactNative> yarn
@@ -52,7 +52,7 @@ In order to build ReactNative UI application, following packages are required:
 ## Configuring ReactNative UI build.
 ReactNative UI application can be build in debug and release mode. Debug builds are split into
 - JS Debug
-  This is a defult configuration for ReactNative UI repo. It caters for remote debugging of JS part of code. Supports live, hot reloading and web inspector support.
+  This is a default configuration for ReactNative UI repository. It caters for remote debugging of JS part of code. Supports live, hot reloading and web inspector support.
 - C# Debug
   Configuration allowing debugging of C# Native part of code through Visual Studio or Visual Studio Code.
   
@@ -165,7 +165,7 @@ If all went well, reloading an application will result in JS code being pulled f
 
 ## Tips
 - When using C# Debug mode, it is recommended to manually uninstall an application prior to execution. Otherwise introduced changes may not be visible.
-- Avoid re-launching application from IDE in JS debug mode. Such re-installs an application loosing configuration entered at initial run. If there are no changes to C# Native part of code, application can be run TV menu.
+- Avoid re-launching an application from IDE for JS debug purposes. Each IDE launch causes an application to be reinstalled resulting in loss of remote debug configuration.
 - There are 3 dlog channels associated with React applications
   - RN - React Native engine logs.
   - RNJS - JS side React Native logs. Includes console logs.
