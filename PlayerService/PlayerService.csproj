@@ -14,7 +14,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="JuvoPlayer" Version="2.2.0-master-v2.17" />
+    <PackageReference Include="JuvoPlayer" Version="2.3.0-alpha" />
   </ItemGroup>
 
   <ItemGroup>

@@ -8,13 +8,11 @@
   </PropertyGroup>
   <Import Project="IntermediateManifest.targets" />
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DefineConstants>TRACE;DEBUG;DEBUGJS</DefineConstants>
     <DebugType>portable</DebugType>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>None</DebugType>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|tizen60|AnyCPU'">
-    <DefineConstants>TRACE;DEBUG;DEBUGJS</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="lib\**" />
@@ -36,7 +34,7 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-	  <PackageReference Include="JuvoPlayer" Version="2.2.0-master-v2.17" />
+	  <PackageReference Include="JuvoPlayer" Version="2.3.0-alpha" />
 	  <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
 	  <PackageReference Include="System.Text.Encoding.CodePages" Version="4.5.0" />
   </ItemGroup>
